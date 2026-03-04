@@ -138,29 +138,19 @@ class WhatsAppInstance
 
 	countUnread() {
 		let unread  = 0;
-		let chats   = 0;
-		const itens = document.getElementsByTagName("span");
+		const itens = document.querySelectorAll('#pane-side [role="row"]>[role="gridcell"] [role="gridcell"][aria-colindex="1"]>span>div')
 		for (const item of itens)
 		{
-			if (item.hasAttributes())
-			{
-				for (const attr of item.attributes)
-				{
-					if (attr.name == "aria-label" && (attr.value == Constants.whatsapp.unreadText || attr.value.search(Constants.whatsapp.unreadTextSearch) != -1))
-					{
-						unread += parseInt(item.innerText);
-						chats  += 1;
-					}
-				}
-			}
+			let parsedUnread = parseInt(item.innerText);
+			if (Number.isNaN(parsedUnread))
+				parsedUnread = 1;
+			unread += parsedUnread;
 		}
 
 		if (this.lastUnread != unread)
 		{
 			this.lastUnread = unread;
-			chats           = chats > 0 ? chats - 1 : chats;
-			
-			ipcRenderer.send(Constants.event.updateUnreadMessages, {id: this.id, unread: unread - chats});
+			ipcRenderer.send(Constants.event.updateUnreadMessages, {id: this.id, unread: unread});
 		}
 	}
 }
