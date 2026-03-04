@@ -291,7 +291,8 @@ class WhatsAppElectron
 			webSecurity: false,
 			webPreferences: {
 				preload: path.join(__dirname, "preload-bw.js")
-			}
+			},
+			show: !process.argv.includes("--start-in-tray")
 		};
 
 		if (this.bounds.x != null)
