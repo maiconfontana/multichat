@@ -138,7 +138,7 @@ class WhatsAppInstance
 
 	countUnread() {
 		let unread  = 0;
-		const itens = document.querySelectorAll('#pane-side [role="row"]>[role="gridcell"] [role="gridcell"][aria-colindex="1"]>span>div>span:not([data-icon])')
+		const itens = document.querySelectorAll('#pane-side [role="row"]>[role="gridcell"] [role="gridcell"][aria-colindex="1"]>span>div>span:not([data-icon], :has(svg))')
 		for (const item of itens)
 		{
 			let parsedUnread = parseInt(item.innerText);
