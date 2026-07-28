@@ -1,5 +1,5 @@
 const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, MenuItem, session } = require('electron');
-const Store = require('electron-store');
+const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
 
@@ -12,9 +12,10 @@ if (!app.requestSingleInstanceLock()) {
 class WhatsAppElectron
 {
 	constructor() {
-		this.store    = new Store();
-		this.baseIcon = !app.isPackaged ? path.join(__dirname, "../assets/whatsapp-icon-512x512.png") : path.join(process.resourcesPath, "app.asar.unpacked/assets/whatsapp-icon-512x512.png");
-		this.isQuit   = false;
+		this.store      = new Store();
+		this.baseIcon   = !app.isPackaged ? path.join(__dirname, "../assets/whatsapp-icon-512x512.png") : path.join(process.resourcesPath, "app.asar.unpacked/assets/whatsapp-icon-512x512.png");
+		this.isQuit     = false;
+		this.spellLangs = ["en-US", "pt-BR"];
 
 		this.bounds = this.store.get("bounds");
 		if (this.bounds == undefined)
@@ -110,6 +111,20 @@ class WhatsAppElectron
 
 	init() {
 		this._initElectronApp();
+
+		// spell langs
+		let langs = [];
+		for (const arg of process.argv)
+		{
+			if (arg.startsWith("--spell-lang"))
+			{
+				const lang = arg.split("=")[1];
+				langs.push(lang);
+			}
+		}
+		if (langs.length > 0)
+			this.spellLangs = langs;
+		console.log(`Spell Check Enabled Languages: ${this.spellLangs}`);
 		
 		this.createWindow();
 
@@ -306,6 +321,9 @@ class WhatsAppElectron
 
 		this.window.webContents.send(Constants.event.initResources, {constants: Constants});
 
+		if (this.spellLangs.length > 0)
+			this.window.webContents.session.setSpellCheckerLanguages(this.spellLangs);
+
 		this.window.on("move", () => { this.storeWindowBounds(); });
 		this.window.on("resize", () => { this.storeWindowBounds(); });
 
@@ -340,6 +358,8 @@ class WhatsAppElectron
 				contextIsolation: false
 			}
 		});
+		if (this.spellLangs.length > 0)
+			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
 		this.instances[id].view = view;
 
 		view._id   = id;
