@@ -12,7 +12,7 @@ Constants = {
 Constants.version = "1.2.6";
 
 Constants.whatsapp.url       = "https://web.whatsapp.com/";
-Constants.whatsapp.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+Constants.whatsapp.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
 
 Constants.event.initResources           = "init-resources";
 Constants.event.initWhatsAppInstance    = "init-whatsapp-instance";

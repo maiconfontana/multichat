@@ -59,6 +59,7 @@ class WhatsAppInstance
 		this.mrid = Math.random().toString(36).substring(7);
 		
 		if (parseFloat(window.Debug.VERSION) < 2.3) {
+			console.log("Module Raid: Using old stuff");
 			window.webpackChunkwhatsapp_web_client.push([
 				[this.mrid], {}, (e) => {
 					Object.keys(e.m).forEach((mod) => {
@@ -67,6 +68,7 @@ class WhatsAppInstance
 				}
 			]);
 		} else {
+			console.log("Module Raid: Using new stuff");
 			var _wai = this;
 			let modules = self.require('__debug').modulesMap;
 			Object.keys(modules).filter(e => e.includes("WA")).forEach(function (mod) {
@@ -86,9 +88,14 @@ class WhatsAppInstance
 				}
 			});
 		}
+
+		console.log(`Module Raid: Loaded ${Object.keys(this.mrobj).length} modules...`);
 	}
 
 	findModule(query) {
+		if (Object.keys(this.mrobj).length === 0)
+			this.loadModuleRaid();
+
 		let results = [];
 		let modules = Object.keys(this.mrobj);
 		modules.forEach((mKey) => {
@@ -118,7 +125,7 @@ class WhatsAppInstance
 	}
 
 	async openChat (tag) {
-		//console.log("openChat tag", tag);
+		console.log(`bv-openChat: ${tag}`);
 
 		let chatWid = this.findModule('createWid')[0].createWid(tag);
 		//console.log("openChat chatWid", chatWid);
