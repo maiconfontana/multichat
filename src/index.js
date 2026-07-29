@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, MenuItem, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, MenuItem, desktopCapturer, session } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
@@ -361,6 +361,12 @@ class WhatsAppElectron
 		if (this.spellLangs.length > 0)
 			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
 		this.instances[id].view = view;
+
+		view.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+			desktopCapturer.getSources({types: ["screen"]}).then((sources) => {
+				callback({video: sources[0], audio: "loopback"});
+			});
+		}, {useSystemPicker: true});
 
 		view._id   = id;
 		view._name = name;
