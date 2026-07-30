@@ -377,9 +377,18 @@ class WhatsAppElectron
 		view.setBackgroundColor('white');
 		view.webContents.loadURL(Constants.whatsapp.url, { userAgent: Constants.whatsapp.userAgent });
 		view.webContents.setWindowOpenHandler((details) => {
-			if (details.url == "https://web.whatsapp.com/call/popout")
-				return {action: "allow"};
-			
+			const url = new URL(details.url);
+			if (url.hostname == "web.whatsapp.com" || url.hostname.endsWith(".whatsapp.com"))
+			{
+				return {
+					action: "allow",
+					overrideBrowserWindowOptions: {
+						parent: this.window,
+						show: true,
+						frame: true
+					}
+				}
+			}
 			require('electron').shell.openExternal(details.url);
 			return { action: 'deny' };
 		});
