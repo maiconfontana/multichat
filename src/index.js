@@ -358,10 +358,13 @@ class WhatsAppElectron
 				contextIsolation: false
 			}
 		});
-		if (this.spellLangs.length > 0)
-			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
 		this.instances[id].view = view;
 
+		// spell check
+		if (this.spellLangs.length > 0)
+			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
+
+		// screen share
 		view.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
 			desktopCapturer.getSources({types: ["screen"]}).then((sources) => {
 				callback({video: sources[0], audio: "loopback"});
