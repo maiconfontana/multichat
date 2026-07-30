@@ -377,6 +377,9 @@ class WhatsAppElectron
 		view.setBackgroundColor('white');
 		view.webContents.loadURL(Constants.whatsapp.url, { userAgent: Constants.whatsapp.userAgent });
 		view.webContents.setWindowOpenHandler((details) => {
+			if (details.url == "https://web.whatsapp.com/call/popout")
+				return {action: "allow"};
+			
 			require('electron').shell.openExternal(details.url);
 			return { action: 'deny' };
 		});
