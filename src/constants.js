@@ -9,7 +9,7 @@ Constants = {
 	whatsapp: {}
 };
 
-Constants.version = "1.2.6";
+Constants.version = "1.2.7";
 
 Constants.whatsapp.url       = "https://web.whatsapp.com/";
 Constants.whatsapp.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
@@ -30,6 +30,10 @@ Constants.event.updateAccount           = "update-account";
 Constants.event.deleteAccount           = "delete-account";
 Constants.event.gotoAccount             = "goto-account";
 Constants.event.reloadAccounts          = "reload-accounts";
+
+Constants.event.getShareSources   = "get-share-sources";
+Constants.event.setShareSelected  = "set-share-selected";
+Constants.event.setShareCancelled = "set-share-cancelled";
 
 const init = (lang) => {
 	switch (lang) {

@@ -296,6 +296,32 @@ class WhatsAppElectron
 			//console.log("From Renderer - gotoAccount", id);
 			this.setCurrentView(id);
 		});
+
+		// screen share
+		ipcMain.handle(Constants.event.getShareSources, async () => {
+			const sources = await desktopCapturer.getSources({types: ["screen", "window"], thumbnailSize: {width: 400, height: 400}});
+			return sources.map(s => ({id: s.id, name: s.name, thumb: s.thumbnail.toDataURL()}));
+		});
+
+		ipcMain.on(Constants.event.setShareSelected, (event, id) => {
+			desktopCapturer.getSources({types: ["screen", "window"]}).then((sources) => {
+				for (const src of sources)
+				{
+					if (src.id == id)
+						this.shareCurrent.callback({video: src, audio: "loopback"});
+				}
+				this.setCurrentView(this.shareCurrent.id);
+				this.shareCurrent = null;
+			});
+		});
+
+		ipcMain.on(Constants.event.setShareCancelled, () => {
+			try {
+				this.shareCurrent.callback({error: "cancelled by user"});
+			} catch {}
+			this.setCurrentView(this.shareCurrent.id);
+			this.shareCurrent = null;
+		});
 	}
 
 	createWindow() {
@@ -366,8 +392,10 @@ class WhatsAppElectron
 
 		// screen share
 		view.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-			desktopCapturer.getSources({types: ["screen"]}).then((sources) => {
-				callback({video: sources[0], audio: "loopback"});
+			desktopCapturer.getSources({types: ["screen", "window"]}).then((sources) => {
+				this.shareCurrent = {id: id, callback: callback};
+				this.removeViews();
+				this.window.webContents.executeJavaScript(`showScreenShareModal('${id}');`);
 			});
 		}, {useSystemPicker: true});
 

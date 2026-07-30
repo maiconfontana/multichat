@@ -129,3 +129,84 @@ $("#accountForm").on("submit", (event) => {
 	}
 });
 
+// screen share
+const shareScreenTemplate = `
+<div class="col">
+  <div class="card mx-auto my-2" style="width: 12rem;">
+    <img src="@IMGDATA" class="card-img-top">
+	<div class="card-body text-center">
+	  <input type="radio" class="btn-check" id="btn-@TYPE-@ID" name="share-id" value="@ID">
+	  <label class="btn btn-sm btn-outline-success" for="btn-@TYPE-@ID">@NAME</label>
+	</div>
+  </div>
+</div>`;
+
+const shareRadioTemplate = `
+<div class="form-check">
+  <input type="radio" class="form-check-input btn-radio-window" id="btn-@TYPE-@ID" name="share-id" value="@ID" wa-img-data="@IMGDATA">
+  <label class="form-check-label small" for="btn-@TYPE-@ID">@NAME</label>
+</div>`;
+
+const screenShareModal    = new bootstrap.Modal('#screenShareModal');
+const screenShareCollapse = {
+	"#share-screens": new bootstrap.Collapse("#share-screens", {parent: "#screenShareModal .modal-body", toggle: false}),
+	"#share-windows": new bootstrap.Collapse("#share-windows", {parent: "#screenShareModal .modal-body", toggle: false})
+};
+
+$(".btn-share-type").on("click", function (e) {
+	$(".btn-share-type").removeClass("active");
+	$(this).addClass("active");
+	const target = $(this).attr("data-bs-target");
+	screenShareCollapse[target].show();
+});
+
+$("#btn-share-cancel").on("click", function () {
+	console.log("share cancelled");
+	screenShareModal.hide();
+	window.electron.setShareCancelled();
+});
+
+$("#btn-share-ok").on("click", function () {
+	const shareid = $("input[name=share-id]:checked").val();
+	if (shareid)
+	{
+		console.log("ShareID", shareid);
+		screenShareModal.hide();
+		window.electron.setShareSelected(shareid);
+	}
+	else
+	{
+		console.log("ShareID not selected");
+	}
+});
+
+let shareViewID = null;
+const showScreenShareModal = (viewid) => {
+	shareViewID = viewid;
+
+	$("#share-screens").empty();
+	$("#share-windows-radios").empty();
+
+	window.electron.getShareSources().then((sources) => {
+		for (const src of sources)
+		{
+			if (src.id.indexOf("screen") != -1)
+			{
+				let item = shareScreenTemplate.replace(/@TYPE/g, "screen").replace(/@ID/g, src.id).replace(/@NAME/g, src.name).replace(/@IMGDATA/g, src.thumb);
+				$("#share-screens").append(item);
+			}
+
+			if (src.id.indexOf("window") != -1)
+			{
+				let item = shareRadioTemplate.replace(/@TYPE/g, "window").replace(/@ID/g, src.id).replace(/@NAME/g, src.name).replace(/@IMGDATA/g, src.thumb);
+				$("#share-windows-radios").append(item);
+			}
+		}
+		$(".btn-radio-window").on("change", function () {
+			$("#share-windows-thumb").attr("src", $(this).attr("wa-img-data"));
+		});
+	});
+
+	screenShareModal.show();
+	$("[data-bs-target='#share-screens']").click().addClass("active");
+};

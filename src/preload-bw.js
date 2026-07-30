@@ -50,7 +50,11 @@ ipcRenderer.on("init-resources", (event, data) => {
 		updateAccount: (id, name) => ipcRenderer.send(Constants.event.updateAccount, {id, name}),
 		deleteAccount: (id) => ipcRenderer.send(Constants.event.deleteAccount, id),
 		gotoAccount: (id) => ipcRenderer.send(Constants.event.gotoAccount, id),
-		reloadAccounts: (callback) => ipcRenderer.on(Constants.event.reloadAccounts, callback)
+		reloadAccounts: (callback) => ipcRenderer.on(Constants.event.reloadAccounts, callback),
+
+		getShareSources: () => ipcRenderer.invoke(Constants.event.getShareSources).then((sources) => { return sources; }),
+		setShareSelected: (id) => ipcRenderer.send(Constants.event.setShareSelected, id),
+		setShareCancelled: () => ipcRenderer.send(Constants.event.setShareCancelled)
 	});
 
 });
