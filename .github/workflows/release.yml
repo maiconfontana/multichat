@@ -1,0 +1,71 @@
+
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repositiry
+        uses: actions/checout@v4
+
+      - name: Setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: 'npm'
+
+      - name: Install Deps
+        run: npm ci
+
+      - name: Run Pack
+        run: |
+          npm run clean
+          npm run pack
+
+      - name: Build Linux
+        run: |
+          npm run dist:linux -- --publish=never
+
+      - name: Build Windows
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run:
+          npm run dist:windows -- --publish=never
+
+      - name: Rename Windows executable
+        run: |
+          cd dist
+          file=$(ls whatsapp-electron*.exe)
+          if [[ "$file" =~ ^whatsapp-electron[[:space:]](.*)\.exe$ ]]; then
+            newname="whatsapp-electron-${BASH_REMATCH[1]}.exe"
+            mv "$file" "$newname"
+          fi
+
+      - name: Upload Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: |
+            dist/whatsapp-electron*.tar.xz
+            dist/whatsapp-electron*.AppImage
+            dist/whatsapp-electron*-win.zip
+            dist/whatsapp-electron*.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/whatsapp-electron*.tar.xz
+            dist/whatsapp-electron*.AppImage
+            dist/whatsapp-electron*-win.zip
+            dist/whatsapp-electron*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+          
