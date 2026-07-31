@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout Repositiry
-        uses: actions/checout@v4
+        uses: actions/checkout@v4
 
       - name: Setup node.js
         uses: actions/setup-node@v4
