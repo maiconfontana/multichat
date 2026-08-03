@@ -289,6 +289,6 @@ ipcRenderer.on("init-whatsapp-instance", (event, data) => {
 	{
 		console.log(`Starting new WhatsAppInstance...`);
 		wa = new WhatsAppInstance(data.id, data.name);
-		window.wa = wa;
+		//window.wa = wa;
 	}
 });
