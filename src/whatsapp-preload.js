@@ -19,29 +19,63 @@ class WhatsAppInstance
 		console.log("Window Notifications Object Replaced by NotificationServer...");
 
 		// Mutation Oberver
+		let unreadSchedule = false;
 		this.observer = new MutationObserver((mutations) => {
-			mutations.forEach((mutation) => {
-				this.countUnread();
+			if (!unreadSchedule)
+			{
+				unreadSchedule = true;
+				requestIdleCallback(() => {
+					this.countUnread(); // run once per callback
+					unreadSchedule = false;
+				}, {timeout: 1000});
+			}
 
-				if (this.mrid == null)
+			if (this.mrid != null)
+				return;
+
+			for (const mutation of mutations)
+			{
+				if (typeof mutation.target.ariaLabel === 'string')
 				{
-					if (typeof mutation.target.ariaLabel === 'string')
+					if (mutation.target.ariaLabel.search(Constants.whatsapp.profilePicture) != -1)
 					{
-						if (mutation.target.ariaLabel.search(Constants.whatsapp.profilePicture) != -1)
-							this.loadModuleRaid();
+						this.loadModuleRaid();
+						break;
 					}
 				}
-			});
+			}
 		});
 
-		setTimeout(() => {
-			console.log("Starting Mutation Observer...");
-			this.observer.observe(document.body, {
+		const observeUnread = () => {
+			const paneSide = document.getElementById("pane-side");
+			this.observer.disconnect();
+			this.observer.observe(paneSide || document.body, {
 				characterData: true,
 				childList: true,
 				subtree: true,
 			});
+			return !!paneSide;
+		};
+
+		setTimeout(() => {
+			console.log("Starting Mutation Observer...");
+			if (observeUnread()) return;
+			console.log("No #pane-side yet, watching document.body for now...");
+			const retarget = setInterval(() => {
+				if (observeUnread()) {
+					clearInterval(retarget);
+					console.log("Unread observer scoped to #pane-side.");
+				}
+			}, 2000);
 		}, 1000);
+
+		const moduleCheckInterval = setInterval(() => {
+			if (this.mrid != null && Object.keys(this.mrobj).length > 0) {
+				clearInterval(moduleCheckInterval);
+				return;
+			}
+			this.loadModuleRaid();
+		}, 3000);
 
 		// Events
 		ipcRenderer.on(Constants.event.fireNotificationClick, (event, tag) => {

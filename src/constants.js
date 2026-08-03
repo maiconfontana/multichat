@@ -9,7 +9,7 @@ Constants = {
 	whatsapp: {}
 };
 
-Constants.version = "1.2.7";
+Constants.version = "1.2.8";
 
 Constants.whatsapp.url       = "https://web.whatsapp.com/";
 Constants.whatsapp.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
@@ -46,9 +46,10 @@ const init = (lang) => {
 	
 	switch (process.platform) {
 		case "win32":
-			Constants.offsets.window.y    = -30;
+			//Constants.offsets.window.y    = -30;
 			Constants.offsets.view.width  = -15;
 			Constants.offsets.view.height = -60;
+			Constants.whatsapp.userAgent  = Constants.whatsapp.userAgent.replace("X11; Linux x86_64", "Windows NT 10.0; Win64; x64");
 			break;
 	}
 

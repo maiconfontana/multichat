@@ -331,7 +331,7 @@ class WhatsAppElectron
 			icon: this.baseIcon,
 			webSecurity: false,
 			webPreferences: {
-				preload: path.join(__dirname, "preload-bw.js")
+				preload: path.join(__dirname, "preload.js")
 			},
 			show: !process.argv.includes("--start-in-tray")
 		};
@@ -343,7 +343,7 @@ class WhatsAppElectron
 		}
 
 		this.window = new BrowserWindow(options);
-		this.window.loadFile(!app.isPackaged ? "index-bw.html" : "./src/index-bw.html");
+		this.window.loadFile(!app.isPackaged ? "accounts.html" : "./src/accounts.html");
 
 		this.window.webContents.send(Constants.event.initResources, {constants: Constants});
 
@@ -379,7 +379,7 @@ class WhatsAppElectron
 		const view = new WebContentsView({
 			webPreferences: {
 				partition: `persist:${id}`,
-				preload: path.join(__dirname, "preload-bv.js"),
+				preload: path.join(__dirname, "whatsapp-preload.js"),
 				spellcheck: true,
 				contextIsolation: false
 			}
