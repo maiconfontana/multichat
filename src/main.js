@@ -9,6 +9,17 @@ if (!app.requestSingleInstanceLock()) {
 	return;
 }
 
+for (const arg of process.argv)
+{
+	if (arg.startsWith("--disable-gpu"))
+	{
+		console.log("WhatsApp Electron: Disabling GPU by --disable-gpu argument")
+		app.disableHardwareAcceleration();
+		app.commandLine.appendSwitch('disable-gpu');
+		app.commandLine.appendSwitch('disable-gpu-compositing');
+	}
+}
+
 class WhatsAppElectron
 {
 	constructor() {
@@ -374,6 +385,7 @@ class WhatsAppElectron
 	}
 
 	createView(id, name) {
+		console.log(`WhatsApp Electron: Creating WebContentsView Instance for "${name} (${id})"`);
 		this.instances[id] = {id: id, name: name, unread: 0, view: null};
 
 		const view = new WebContentsView({
@@ -421,11 +433,12 @@ class WhatsAppElectron
 			return { action: 'deny' };
 		});
 		
-		setTimeout(function () {
+		// init whatsapp instance afeter load finished
+		view.webContents.on("did-finish-load", () => {
+			console.log(`WhatsApp Electron: WebContentsView Instance for "${name} (${id})" has finished loading, initializing it...`);
 			view.webContents.send(Constants.event.initWhatsAppInstance, {id: id, name: name, constants: Constants});
-		}, 2000);
-		//view.webContents.send(Constants.event.initWhatsAppInstance, {id: id, name: name, constants: Constants});
-
+		});
+		
 		let menuItem = {
 			id: id,
 			label: name,
