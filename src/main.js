@@ -135,7 +135,7 @@ class WhatsAppElectron
 		}
 		if (langs.length > 0)
 			this.spellLangs = langs;
-		console.log(`Spell Check Enabled Languages: ${this.spellLangs}`);
+		console.log(`WhatsApp Electron: Spell Check Enabled Languages: ${this.spellLangs}`);
 		
 		this.createWindow();
 
@@ -163,20 +163,28 @@ class WhatsAppElectron
 		this.tray.on("click", () => { this.showHide(); });
 
 		// Events
+		this.aciveNotifications = [];
 		ipcMain.on(Constants.event.newRendererNotification, (event, data) => {
 			//console.log("New Renderer Notification...", data);
 			const n = new Notification({
 				title: `[${this.instances[data.id].name}] :: ${data.title}`,
 				body: data.options.body,
-				icon: nativeImage.createFromDataURL(data.icon)
+				icon: nativeImage.createFromDataURL(data.icon),
+				urgency: "normal"
 			});
 			n.on("click", (event) => {
 				//console.log("Notification Clicked...", data.id, data.options.tag);
 				this.showHide(false);
 				this.setCurrentView(data.id);
 				this.instances[data.id].view.webContents.send(Constants.event.fireNotificationClick, data.options.tag);
+				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
+			});
+			n.on("close", (event) => {
+				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
 			});
 			n.show();
+
+			this.aciveNotifications.push(n);
 		});
 
 		ipcMain.on(Constants.event.updateUnreadMessages, (event, data) => {
@@ -191,7 +199,7 @@ class WhatsAppElectron
 		});
 		
 		ipcMain.on(Constants.event.reloadWhatsAppInstance, (envet, id) => {
-			console.log("Received reloadWhatsAppInstance...", id);
+			console.log("WhatsApp Electron: Received reloadWhatsAppInstance...", id);
 			const bv = this.instances[id].view;
 			bv.webContents.reload();
 			setTimeout(() => {
@@ -199,7 +207,7 @@ class WhatsAppElectron
 			}, 1000);
 		});
 		ipcMain.on(Constants.event.clearWorkersAndReload, (envet, id) => {
-			console.log("Received clearWorkersAndReload...", id);
+			console.log("WhatsApp Electron: Received clearWorkersAndReload...", id);
 			const ses = session.fromPartition(`persist:${id}`);
 			ses.flushStorageData();
 			ses.clearStorageData({ storages: ['serviceworkers'] });
