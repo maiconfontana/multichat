@@ -6,7 +6,7 @@ Tested on Linux and Windows.
 
 Requires:
 
-- Nodejs **== v18**
+- Nodejs **>= v24**
 - npm
 - git
 
