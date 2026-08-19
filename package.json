@@ -12,7 +12,7 @@
   ],
   "main": "./src/main.js",
   "scripts": {
-    "start": "electron ./src",
+    "start": "electron .",
     "clean": "rm -rf ./dist",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
@@ -47,19 +47,19 @@
       ]
     },
     "protocols": [
-			{
-				"name": "WhatsApp",
-				"schemes": [
-					"whatsapp"
-				]
-			}
-		]
+      {
+        "name": "WhatsApp",
+        "schemes": [
+          "whatsapp"
+        ]
+      }
+    ]
   },
   "dependencies": {
     "electron-store": "^11.0.2"
   },
   "devDependencies": {
-    "electron": "^43.2.0",
+    "electron": "^43.4.1",
     "electron-builder": "^26.15.7"
   }
 }
