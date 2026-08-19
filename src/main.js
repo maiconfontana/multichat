@@ -143,7 +143,7 @@ class WhatsAppElectron
 			this.createView(item.id, item.name);
 
 		// set version on menu
-		this.menuTemplate[1].submenu[0].label = `Version ${Constants.version}`;
+		this.menuTemplate[1].submenu[0].label = `Version ${Constants.version} (Electron@${process.versions.electron})`;
 
 		this.menu = Menu.buildFromTemplate(this.menuTemplate);
 		Menu.setApplicationMenu(this.menu);
@@ -362,7 +362,8 @@ class WhatsAppElectron
 		}
 
 		this.window = new BrowserWindow(options);
-		this.window.loadFile(!app.isPackaged ? "accounts.html" : "./src/accounts.html");
+		//this.window.loadFile(!app.isPackaged ? "accounts.html" : "./src/accounts.html");
+		this.window.loadFile("./src/accounts.html");
 
 		this.window.webContents.send(Constants.event.initResources, {constants: Constants});
 

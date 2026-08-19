@@ -22,7 +22,7 @@
   "build": {
     "linux": {
       "appId": "WhatsApp Electron",
-      "icon": "./assets/whatsapp-icon-512x512.png",
+      "icon": "./src/assets/whatsapp-icon-512x512.png",
       "category": "Network",
       "target": [
         "AppImage",
@@ -35,7 +35,7 @@
     },
     "win": {
       "appId": "WhatsApp Electron",
-      "icon": "./assets/whatsapp-icon-512x512.png",
+      "icon": "./src/assets/whatsapp-icon-512x512.png",
       "target": [
         "portable",
         "zip"
@@ -59,7 +59,7 @@
     "electron-store": "^11.0.2"
   },
   "devDependencies": {
-    "electron": "^43.4.1",
+    "electron": "^42.9.3",
     "electron-builder": "^26.15.7"
   }
 }
