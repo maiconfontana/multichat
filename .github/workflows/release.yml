@@ -41,33 +41,24 @@ jobs:
         run:
           npm run dist:windows -- --publish=never
 
-      - name: Rename Windows executable
-        run: |
-          cd dist
-          file=$(ls whatsapp-electron*.exe)
-          if [[ "$file" =~ ^whatsapp-electron[[:space:]](.*)\.exe$ ]]; then
-            newname="whatsapp-electron-${BASH_REMATCH[1]}.exe"
-            mv "$file" "$newname"
-          fi
-
       - name: Upload Packages
         uses: actions/upload-artifact@v4
         with:
           name: dist-artifacts
           path: |
-            dist/whatsapp-electron*.tar.xz
-            dist/whatsapp-electron*.AppImage
-            dist/whatsapp-electron*-win.zip
-            dist/whatsapp-electron*.exe
+            dist/MultiChat-*.tar.xz
+            dist/MultiChat-*.AppImage
+            dist/MultiChat-*-win.zip
+            dist/MultiChat-*.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/whatsapp-electron*.tar.xz
-            dist/whatsapp-electron*.AppImage
-            dist/whatsapp-electron*-win.zip
-            dist/whatsapp-electron*.exe
+            dist/MultiChat-*.tar.xz
+            dist/MultiChat-*.AppImage
+            dist/MultiChat-*-win.zip
+            dist/MultiChat-*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
