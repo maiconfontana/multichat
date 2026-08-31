@@ -1,8 +1,10 @@
+// Preload do seletor de compartilhamento de tela.
+// RODA EM SANDBOX: apenas require('electron') é permitido — nomes de
+// eventos declarados como literais (não importar constants.js daqui).
 const { contextBridge, ipcRenderer } = require('electron');
-const Constants = require('./constants').init('pt-BR');
 
 contextBridge.exposeInMainWorld("electron", {
-	getShareSources: () => ipcRenderer.invoke(Constants.event.getShareSources),
-	setShareSelected: (id) => ipcRenderer.send(Constants.event.setShareSelected, id),
-	setShareCancelled: () => ipcRenderer.send(Constants.event.setShareCancelled)
+	getShareSources: () => ipcRenderer.invoke("get-share-sources"),
+	setShareSelected: (id) => ipcRenderer.send("set-share-selected", id),
+	setShareCancelled: () => ipcRenderer.send("set-share-cancelled")
 });

@@ -2,7 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 let Constants = null;
 
-const BADGE_ICON_SRC = "file://" + require('path').join(__dirname, "../assets/icon-32.png");
+// Caminho RELATIVO (o renderer já é servido de dentro do app): evita
+// require('path'), proibido em preload sandboxed (module not found: path).
+const BADGE_ICON_SRC = "../assets/icon-32.png";
 
 // Desenha o badge do tray (contador sobre o logo) e devolve um dataURL.
 // A fonte e o círculo escalam com o tamanho real do ícone (em vez de fixo
@@ -42,23 +44,27 @@ const buildBadgeIcon = (counter) => {
 	image.src = BADGE_ICON_SRC;
 };
 
-// Main sends init-resources before the window is shown
+// Recebe as constantes do main. Chega tanto no envio imediato (pós-loadFile)
+// quanto reenviado no did-finish-load — ver createSidebarView no main.js —
+// então a race "evento chega antes do listener" não derruba mais a sidebar.
 ipcRenderer.on("init-resources", (event, data) => {
+	if (Constants) return; // idempotente
 	Constants = data.constants;
+	console.log("[sidebar] preload OK — API window.electron exposta");
 	ipcRenderer.on(Constants.event.buildBadgeIcon, (event, counter) => buildBadgeIcon(counter));
 });
 
 contextBridge.exposeInMainWorld("electron", {
-	getAccounts: () => ipcRenderer.invoke(Constants.event.getAccountsList),
-	addAccount: (data) => ipcRenderer.send(Constants.event.addAccount, data),
-	updateAccount: (data) => ipcRenderer.send(Constants.event.updateAccount, data),
-	deleteAccount: (id) => ipcRenderer.send(Constants.event.deleteAccount, id),
-	gotoAccount: (id) => ipcRenderer.send(Constants.event.gotoAccount, id),
-	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants.event.toggleNotifications, { id, enabled }),
-	toggleSidebar: () => ipcRenderer.send(Constants.event.toggleSidebar),
-	onSidebarState: (cb) => ipcRenderer.on(Constants.event.sidebarState, (e, collapsed) => cb(collapsed)),
+	getAccounts: () => ipcRenderer.invoke(Constants && Constants.event.getAccountsList),
+	addAccount: (data) => ipcRenderer.send(Constants && Constants.event.addAccount, data),
+	updateAccount: (data) => ipcRenderer.send(Constants && Constants.event.updateAccount, data),
+	deleteAccount: (id) => ipcRenderer.send(Constants && Constants.event.deleteAccount, id),
+	gotoAccount: (id) => ipcRenderer.send(Constants && Constants.event.gotoAccount, id),
+	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants && Constants.event.toggleNotifications, { id, enabled }),
+	toggleSidebar: () => ipcRenderer.send(Constants && Constants.event.toggleSidebar),
+	onSidebarState: (cb) => ipcRenderer.on("sidebar-state", (e, collapsed) => cb(collapsed)),
 
-	reloadAccounts: (cb) => ipcRenderer.on(Constants.event.reloadAccounts, cb),
-	onUpdateUnread: (cb) => ipcRenderer.on(Constants.event.updateUnread, (e, data) => cb(data)),
-	onActiveAccount: (cb) => ipcRenderer.on(Constants.event.activeAccount, (e, id) => cb(id))
+	reloadAccounts: (cb) => ipcRenderer.on("reload-accounts", cb),
+	onUpdateUnread: (cb) => ipcRenderer.on("update-unread", (e, data) => cb(data)),
+	onActiveAccount: (cb) => ipcRenderer.on("active-account", (e, id) => cb(id))
 });

@@ -37,7 +37,11 @@ class MultiChatApp {
 		this.activeId   = null;
 		this.shareCurrent = null;
 		this.sharePicker = null;
-		this.sidebarCollapsed = this.store.get("sidebarCollapsed", false);
+		this.sidebarCollapsed = this.store.get("sidebarCollapsed");
+		if (this.sidebarCollapsed === undefined) {
+			this.sidebarCollapsed = true; // padrão: sidebar recolhida (só ícones)
+			this.store.set("sidebarCollapsed", true);
+		}
 		this._boundsTimer = null;
 
 		this.bounds = this.store.get("bounds");
@@ -406,7 +410,13 @@ class MultiChatApp {
 		});
 		this.sidebarView.setBackgroundColor('#111b21');
 		this.sidebarView.webContents.loadFile(path.join(__dirname, "accounts.html"));
+		// Envio imediato (cobre o caso do listener já registrado)…
 		this.sidebarView.webContents.send(Constants.event.initResources, { constants: ConstantsForIPC() });
+		// …e reenvio quando a página terminar de carregar, para vencer a race
+		// "evento chega antes do preload existir". O preload é idempotente.
+		this.sidebarView.webContents.on("did-finish-load", () => {
+			this.sidebarView.webContents.send(Constants.event.initResources, { constants: ConstantsForIPC() });
+		});
 
 		// Sidebar is always first (z-order: bottom)
 		this.window.contentView.addChildView(this.sidebarView);
