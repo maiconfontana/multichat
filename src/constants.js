@@ -1,5 +1,6 @@
 Constants = {
 	appName : "MultiChat",
+	appId   : "com.maiconfontana.multichat",
 	offsets : {
 		window: { x: 0, y: 0, width: 0, height: 0 },
 		view: { x: 0, y: 0, width: 0, height: 0 }
@@ -56,10 +57,30 @@ Constants = {
 	}
 };
 
-Constants.version = "1.4.0";
+Constants.version = "1.5.0";
 
-Constants.whatsapp.url       = "https://web.whatsapp.com/";
-Constants.whatsapp.userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36";
+Constants.whatsapp.url = "https://web.whatsapp.com/";
+
+// User-Agent coerente com a plataforma real — evita que o WhatsApp Web
+// enxergue "Linux" num app rodando em Windows/macOS.
+const _chromeVer = () => {
+	try { return process.versions.chrome || "150.0.0.0"; }
+	catch (e) { return "150.0.0.0"; }
+};
+
+Constants.userAgentFor = () => {
+	const chrome = _chromeVer();
+	switch (process.platform) {
+		case "win32":
+			return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+		case "darwin":
+			return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+		default:
+			return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+	}
+};
+
+Constants.whatsapp.userAgent = Constants.userAgentFor();
 
 Constants.event.initResources           = "init-resources";
 Constants.event.initWhatsAppInstance    = "init-whatsapp-instance";
@@ -94,13 +115,6 @@ const init = (lang) => {
 			Constants.whatsapp.profilePicture   = /foto do perfil|conversas/i;
 			Constants.whatsapp.unreadText       = "Não lidas";
 			Constants.whatsapp.unreadTextSearch = /[0-9]+ mensage(m|ns)? não lida(s)?/;
-			break;
-	}
-	switch (process.platform) {
-		case "win32":
-			Constants.offsets.view.width  = -15;
-			Constants.offsets.view.height = -60;
-			Constants.whatsapp.userAgent  = Constants.whatsapp.userAgent.replace("X11; Linux x86_64", "Windows NT 10.0; Win64; x64");
 			break;
 	}
 	return Constants;

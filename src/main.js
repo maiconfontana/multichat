@@ -1,7 +1,11 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
+
+// Constantes serializáveis para enviar aos renderers via IPC (sem funções,
+// que não atravessam a ponte — ver initResources / init*Instance).
+const ConstantsForIPC = () => JSON.parse(JSON.stringify(Constants));
 
 if (!app.requestSingleInstanceLock()) {
 	app.quit();
@@ -17,15 +21,24 @@ for (const arg of process.argv) {
 	}
 }
 
+// Tempo de inatividade antes de suspender (descarregar da RAM) uma conta
+// que não está em exibição. O login fica salvo (sessão persistente) e a
+// conta recarrega automaticamente ao ser selecionada de novo.
+const SUSPEND_AFTER_MS = 10 * 60 * 1000;
+const BOUNDS_DEBOUNCE_MS = 150;
+
 class MultiChatApp {
 	constructor() {
 		this.store      = new Store();
 		this.baseIcon   = path.join(__dirname, "../assets/icon.png");
+		this.trayIcon   = path.join(__dirname, "../assets/icon-32.png");
 		this.isQuit     = false;
 		this.spellLangs = ["en-US", "pt-BR"];
 		this.activeId   = null;
 		this.shareCurrent = null;
+		this.sharePicker = null;
 		this.sidebarCollapsed = this.store.get("sidebarCollapsed", false);
+		this._boundsTimer = null;
 
 		this.bounds = this.store.get("bounds");
 		if (this.bounds == undefined) {
@@ -40,22 +53,58 @@ class MultiChatApp {
 			this.store.set("accounts", this.accounts);
 		}
 
-		this.menuTemplate = [
-			{
+		const quitItem = { label: "Encerrar", click: () => { this.isQuit = true; app.quit(); } };
+
+		const appMenu = [];
+		if (process.platform === "darwin") {
+			appMenu.push({
 				label: "MultiChat",
 				submenu: [
-					{ label: "Reload Current Account", accelerator: "Ctrl+R", click: () => { this.reloadCurrentView(); } },
-					{ label: "Open DevTools (Account)", accelerator: "Ctrl+Shift+I", click: () => { this.openDevTools(); } },
+					{ role: "about" },
 					{ type: "separator" },
-					{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
+					{ role: "services" },
+					{ type: "separator" },
+					{ role: "hide" },
+					{ role: "hideOthers" },
+					{ role: "unhide" },
+					{ type: "separator" },
+					quitItem
+				]
+			});
+		}
+
+		this.menuTemplate = [
+			...appMenu,
+			{
+				label: "Conta",
+				submenu: [
+					{ label: "Recarregar conta atual", accelerator: "CmdOrCtrl+R", click: () => { this.reloadCurrentView(); } },
+					{ label: "Próxima conta", accelerator: "CmdOrCtrl+Tab", click: () => { this.cycleAccount(1); } },
+					{ label: "Conta anterior", accelerator: "CmdOrCtrl+Shift+Tab", click: () => { this.cycleAccount(-1); } },
+					{ type: "separator" },
+					{ label: "Ferramentas de desenvolvedor", accelerator: "CmdOrCtrl+Shift+I", click: () => { this.openDevTools(); } },
+					{ type: "separator" },
+					quitItem
 				]
 			},
 			{
-				label: 'Help',
+				label: "Exibir",
+				submenu: [
+					{ role: "resetZoom", label: "Zoom padrão" },
+					{ role: "zoomIn",  label: "Ampliar" },
+					{ role: "zoomOut", label: "Reduzir" },
+					{ type: "separator" },
+					{ role: "togglefullscreen", label: "Tela cheia" },
+					{ type: "separator" },
+					{ label: this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral", click: () => { this.toggleSidebar(); } }
+				]
+			},
+			{
+				label: "Ajuda",
 				submenu: [
 					{ label: "Version undefined by me", enabled: false },
-					{ type: 'separator' },
-					{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
+					{ type: "separator" },
+					quitItem
 				]
 			}
 		];
@@ -64,7 +113,7 @@ class MultiChatApp {
 	_initElectronApp() {
 		app.userAgentFallback = Constants.whatsapp.userAgent;
 		if (process.platform == "win32")
-			app.setAppUserModelId(Constants.appName);
+			app.setAppUserModelId(Constants.appId);
 	}
 
 	init() {
@@ -83,27 +132,31 @@ class MultiChatApp {
 		this.createWindow();
 		this.createSidebarView();
 
-		for (const item of this.accounts)
-			this.createAccountView(item);
-
-		this.menuTemplate[1].submenu[0].label = `Version ${Constants.version} (Electron@${process.versions.electron})`;
-		this.menu = Menu.buildFromTemplate(this.menuTemplate);
-		Menu.setApplicationMenu(this.menu);
-
+		// Lazy-load: apenas a primeira conta é carregada no início.
+		// As demais são criadas quando selecionadas pela primeira vez e
+		// suspensas (descarregadas) após um período sem uso (ver suspendAccount).
 		if (this.accounts.length > 0)
 			this.setCurrentView(this.accounts[0].id);
 
+		this.menuTemplate[this.menuTemplate.length - 1].submenu[0].label =
+			`Versão ${Constants.version} (Electron@${process.versions.electron})`;
+		this.menu = Menu.buildFromTemplate(this.menuTemplate);
+		Menu.setApplicationMenu(this.menu);
+
 		const trayMenu = Menu.buildFromTemplate([
-			{ label: "Show/Hide", click: () => { this.showHide(); } },
+			{ label: "Mostrar/ocultar", click: () => { this.showHide(); } },
 			{ type: "separator" },
-			{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
+			{ label: "Encerrar", click: () => { this.isQuit = true; app.quit(); } }
 		]);
-		this.tray = new Tray(this.baseIcon);
+		const trayImg = fs.existsSync(this.trayIcon)
+			? nativeImage.createFromPath(this.trayIcon)
+			: nativeImage.createFromPath(this.baseIcon);
+		this.tray = new Tray(trayImg);
 		this.tray.setContextMenu(trayMenu);
 		this.tray.setToolTip(Constants.appName);
 		this.tray.on("click", () => { this.showHide(); });
 
-		this.aciveNotifications = [];
+		this.activeNotifications = [];
 	}
 
 	registerEvents() {
@@ -125,18 +178,19 @@ class MultiChatApp {
 			n.on("click", () => {
 				this.showHide(false);
 				this.setCurrentView(data.id);
-				if (this.instances[data.id])
+				if (this.instances[data.id] && this.instances[data.id].view)
 					this.instances[data.id].view.webContents.send(Constants.event.fireNotificationClick, data.options.tag);
-				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
+				this.activeNotifications = this.activeNotifications.filter(_n => _n !== n);
 			});
 			n.on("close", () => {
-				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
+				this.activeNotifications = this.activeNotifications.filter(_n => _n !== n);
 			});
-			this.aciveNotifications.push(n);
+			this.activeNotifications.push(n);
 			n.show();
 		});
 
 		ipcMain.on(Constants.event.updateBadgeIcon, (event, dataURL) => {
+			if (!this.tray) return;
 			this.tray.setImage(nativeImage.createFromDataURL(dataURL));
 		});
 
@@ -172,7 +226,7 @@ class MultiChatApp {
 			};
 			this.accounts.push(account);
 			this.store.set("accounts", this.accounts);
-			this.createAccountView(account);
+			// A view é criada por setCurrentView (lazy), não aqui.
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 			this.setCurrentView(account.id);
 		});
@@ -203,18 +257,24 @@ class MultiChatApp {
 			for (let idx = 0; idx < this.accounts.length; idx++) {
 				if (this.accounts[idx].id == id) { toDelete = idx; break; }
 			}
+			if (toDelete == -1) return; // id inválido: não remover a última conta por engano
+
 			this.accounts.splice(toDelete, 1);
 			this.store.set("accounts", this.accounts);
 
 			if (this.instances[id]) {
-				this.window.contentView.removeChildView(this.instances[id].view);
+				this.clearSuspendTimer(id);
+				if (this.instances[id].view) {
+					this.window.contentView.removeChildView(this.instances[id].view);
+					try { this.instances[id].view.webContents.close(); } catch (e) {}
+				}
 				delete this.instances[id];
 			}
 
 			const ses = session.fromPartition(`persist:${id}`);
 			ses.clearStorageData().then(() => {
 				const dir = ses.getStoragePath();
-				fs.rmSync(dir, { recursive: true, force: true });
+				if (dir) fs.rmSync(dir, { recursive: true, force: true });
 			});
 
 			if (this.activeId == id)
@@ -241,12 +301,69 @@ class MultiChatApp {
 		});
 
 		ipcMain.on(Constants.event.toggleSidebar, () => {
-			this.sidebarCollapsed = !this.sidebarCollapsed;
-			this.store.set("sidebarCollapsed", this.sidebarCollapsed);
-			this.updateSidebarBounds();
-			for (const id in this.instances)
-				this.layoutAccountView(id);
+			this.toggleSidebar();
 		});
+
+		// ── Compartilhamento de tela (modal em janela própria) ──
+		ipcMain.handle(Constants.event.getShareSources, async () => {
+			const sources = await desktopCapturer.getSources({
+				types: ["screen", "window"],
+				thumbnailSize: { width: 320, height: 180 }
+			});
+			return sources.map(s => ({
+				id: s.id,
+				name: s.name,
+				thumb: s.thumbnail.toDataURL()
+			}));
+		});
+
+		ipcMain.on(Constants.event.setShareSelected, (event, shareId) => {
+			if (!this.shareCurrent) return;
+			try { this.shareCurrent.callback({ video: { id: shareId } }); } catch (e) {}
+			this.shareCurrent = null;
+			this.closeSharePicker();
+		});
+
+		ipcMain.on(Constants.event.setShareCancelled, () => {
+			if (!this.shareCurrent) return;
+			try { this.shareCurrent.callback(null); } catch (e) {}
+			this.shareCurrent = null;
+			this.closeSharePicker();
+		});
+
+		// ── Limpar ServiceWorkers/cache e recarregar (anti "atualize o Chrome") ──
+		ipcMain.on(Constants.event.clearWorkersAndReload, (event, id) => {
+			const inst = this.instances[id];
+			if (!inst || !inst.view) return;
+			console.log(`Clearing workers and reloading account "${inst.name}" (${id})...`);
+			const ses = inst.view.webContents.session;
+			ses.clearStorageData({
+				storages: ["serviceworkers", "cachestorage"]
+			}).then(() => {
+				if (inst.view) inst.view.webContents.reload();
+			}).catch(() => {
+				if (inst.view) inst.view.webContents.reload();
+			});
+		});
+	}
+
+	toggleSidebar() {
+		this.sidebarCollapsed = !this.sidebarCollapsed;
+		this.store.set("sidebarCollapsed", this.sidebarCollapsed);
+		this.updateSidebarBounds();
+		for (const id in this.instances)
+			this.layoutAccountView(id);
+		// Atualiza o label do item de menu correspondente
+		const viewMenu = this.menuTemplate.find(m => m.label === "Exibir");
+		if (viewMenu) {
+			for (const item of viewMenu.submenu) {
+				if (item.label === "Expandir barra lateral" || item.label === "Recolher barra lateral") {
+					item.label = this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral";
+					break;
+				}
+			}
+		}
+		if (this.menu) Menu.setApplicationMenu(Menu.buildFromTemplate(this.menuTemplate));
 	}
 
 	createWindow() {
@@ -254,7 +371,8 @@ class MultiChatApp {
 			width: this.bounds.width,
 			height: this.bounds.height,
 			icon: this.baseIcon,
-			show: !process.argv.includes("--start-in-tray")
+			backgroundColor: "#111b21",
+			show: false // mostra em ready-to-show — evita flash de janela vazia
 		};
 		if (this.bounds.x != null) {
 			options.x = this.bounds.x;
@@ -266,11 +384,13 @@ class MultiChatApp {
 		if (this.bounds.x == null)
 			this.window.center();
 
-		// Don't load any file directly — the sidebar and account views
-		// will be added as child views of the window's contentView.
+		this.window.once("ready-to-show", () => {
+			if (!process.argv.includes("--start-in-tray"))
+				this.window.show();
+		});
 
-		this.window.on("move", () => { this.storeWindowBounds(); });
-		this.window.on("resize", () => { this.storeWindowBounds(); });
+		this.window.on("move", () => { this.scheduleStoreBounds(); });
+		this.window.on("resize", () => { this.scheduleStoreBounds(); });
 		this.window.on("close", (e) => {
 			if (this.isQuit) { app.quit(); return; }
 			e.preventDefault();
@@ -288,7 +408,7 @@ class MultiChatApp {
 		});
 		this.sidebarView.setBackgroundColor('#111b21');
 		this.sidebarView.webContents.loadFile(path.join(__dirname, "accounts.html"));
-		this.sidebarView.webContents.send(Constants.event.initResources, { constants: Constants });
+		this.sidebarView.webContents.send(Constants.event.initResources, { constants: ConstantsForIPC() });
 
 		// Sidebar is always first (z-order: bottom)
 		this.window.contentView.addChildView(this.sidebarView);
@@ -297,27 +417,31 @@ class MultiChatApp {
 		// When sidebar finishes loading, notify it of the active account
 		this.sidebarView.webContents.on("did-finish-load", () => {
 			this.sidebarView.webContents.send(Constants.event.activeAccount, this.activeId);
-			// Send initial accounts list
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
-			// Send initial collapsed state
 			this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
 		});
 	}
 
 	createAccountView(account) {
 		const id = account.id;
+		if (this.instances[id] && this.instances[id].view)
+			return this.instances[id].view; // já criada
+
 		const name = account.name;
 		const type = account.type || "whatsapp";
 		const url  = account.url || (Constants.services[type] ? Constants.services[type].url : Constants.whatsapp.url);
 		const preloadFile = Constants.services[type] ? Constants.services[type].preload : "whatsapp-preload.js";
 
 		console.log(`Creating account view for "${name} (${id})" [${type}]`);
-		this.instances[id] = {
-			id, name, type,
-			unread: 0,
-			notifications: account.notifications || { enabled: true },
-			view: null
-		};
+		if (!this.instances[id]) {
+			this.instances[id] = {
+				id, name, type,
+				unread: 0,
+				notifications: account.notifications || { enabled: true },
+				view: null,
+				suspendTimer: null
+			};
+		}
 
 		const view = new WebContentsView({
 			webPreferences: {
@@ -328,17 +452,16 @@ class MultiChatApp {
 			}
 		});
 		this.instances[id].view = view;
+		this.instances[id].name = name;
+		this.instances[id].type = type;
 
 		if (this.spellLangs.length > 0)
 			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
 
 		view.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-			desktopCapturer.getSources({ types: ["screen", "window"] }).then((sources) => {
-				this.shareCurrent = { id, callback };
-				if (this.sidebarView)
-					this.sidebarView.webContents.executeJavaScript(`showScreenShareModal('${id}');`);
-			});
-		}, { useSystemPicker: true });
+			this.shareCurrent = { id, callback };
+			this.openScreenSharePicker();
+		});
 
 		view._id   = id;
 		view._name = name;
@@ -354,7 +477,7 @@ class MultiChatApp {
 				if (host === baseHost || host.endsWith("." + baseHost))
 					return { action: "allow" };
 			} catch (e) {}
-			require('electron').shell.openExternal(details.url);
+			shell.openExternal(details.url);
 			return { action: 'deny' };
 		});
 
@@ -363,28 +486,94 @@ class MultiChatApp {
 			const initEvent = (preloadFile === "whatsapp-preload.js")
 				? Constants.event.initWhatsAppInstance
 				: Constants.event.initGenericInstance;
-			view.webContents.send(initEvent, { id, name, constants: Constants });
+			view.webContents.send(initEvent, { id, name, constants: ConstantsForIPC() });
+		});
+
+		// Se o renderer da conta morrer, recria (mantendo a sessão persistente)
+		view.webContents.on("render-process-gone", (event, details) => {
+			console.warn(`Account "${name} (${id})" renderer gone: ${details.reason}`);
+			const inst = this.instances[id];
+			if (!inst) return;
+			this.clearSuspendTimer(id);
+			try { this.window.contentView.removeChildView(view); } catch (e) {}
+			inst.view = null;
+			if (this.activeId === id)
+				this.setCurrentView(id); // recria imediatamente a conta ativa
 		});
 
 		// Start hidden — will be shown when set as current
 		view.setVisible(false);
 		this.window.contentView.addChildView(view);
 		this.layoutAccountView(id);
+		return view;
+	}
+
+	ensureAccountView(id) {
+		const account = this.accounts.find(a => a.id === id);
+		if (!account) return null;
+		if (this.instances[id] && this.instances[id].view)
+			return this.instances[id].view;
+		return this.createAccountView(account);
+	}
+
+	clearSuspendTimer(id) {
+		const inst = this.instances[id];
+		if (inst && inst.suspendTimer) {
+			clearTimeout(inst.suspendTimer);
+			inst.suspendTimer = null;
+		}
+	}
+
+	scheduleSuspend(id) {
+		const inst = this.instances[id];
+		if (!inst || !inst.view || id === this.activeId) return;
+		this.clearSuspendTimer(id);
+		inst.suspendTimer = setTimeout(() => {
+			this.suspendAccount(id);
+		}, SUSPEND_AFTER_MS);
+	}
+
+	suspendAccount(id) {
+		const inst = this.instances[id];
+		if (!inst || !inst.view || id === this.activeId) return;
+		console.log(`Suspending account "${inst.name}" (${id}) — freeing memory`);
+		this.clearSuspendTimer(id);
+		try {
+			this.window.contentView.removeChildView(inst.view);
+			inst.view.webContents.close();
+		} catch (e) {
+			console.warn(`Suspend of "${id}" failed: ${e.message}`);
+		}
+		inst.view = null;
 	}
 
 	setCurrentView(id) {
 		const instance = this.instances[id];
-		if (!instance) return;
+		if (!instance) {
+			// conta nunca carregada (lazy): cria agora
+			const view = this.ensureAccountView(id);
+			if (!view) return;
+		}
 
 		// Hide all account views, show only the active one
 		for (const aid in this.instances) {
-			this.instances[aid].view.setVisible(aid === id);
+			if (this.instances[aid].view)
+				this.instances[aid].view.setVisible(aid === id);
 		}
 
 		this.activeId = id;
-		this.window.setTitle(`${Constants.appName} :: ${instance.name}`);
-		this.layoutAccountView(id);
-		instance.view.webContents.focus();
+
+		const inst = this.instances[id];
+		this.window.setTitle(`${Constants.appName} :: ${inst.name}`);
+		if (inst.view) {
+			this.layoutAccountView(id);
+			inst.view.webContents.focus();
+		}
+
+		// (Re)agenda a suspensão das outras contas e cancela a da ativa
+		this.clearSuspendTimer(id);
+		for (const aid in this.instances)
+			this.scheduleSuspend(aid);
 
 		// Notify sidebar
 		if (this.sidebarView) {
@@ -393,8 +582,11 @@ class MultiChatApp {
 		}
 	}
 
-	setCurrentViewByIdx(idx) {
-		this.setCurrentView(this.accounts[idx].id);
+	cycleAccount(dir) {
+		if (this.accounts.length < 2) return;
+		const idx = this.accounts.findIndex(a => a.id === this.activeId);
+		const next = (idx + dir + this.accounts.length) % this.accounts.length;
+		this.setCurrentView(this.accounts[next].id);
 	}
 
 	getSidebarWidth() {
@@ -402,12 +594,12 @@ class MultiChatApp {
 	}
 
 	layoutAccountView(id) {
-		const view = this.instances[id].view;
-		if (!view) return;
-		const w = this.window.getContentBounds().width;
-		const h = this.window.getContentBounds().height;
+		const inst = this.instances[id];
+		if (!inst || !inst.view) return;
+		const view = inst.view;
+		const b = this.window.getContentBounds();
 		const sbw = this.getSidebarWidth();
-		view.setBounds({ x: sbw, y: 0, width: w - sbw, height: h });
+		view.setBounds({ x: sbw, y: 0, width: b.width - sbw, height: b.height });
 	}
 
 	updateSidebarBounds() {
@@ -416,6 +608,14 @@ class MultiChatApp {
 		const sbw = this.getSidebarWidth();
 		this.sidebarView.setBounds({ x: 0, y: 0, width: sbw, height: h });
 		this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
+	}
+
+	scheduleStoreBounds() {
+		if (this._boundsTimer) return;
+		this._boundsTimer = setTimeout(() => {
+			this._boundsTimer = null;
+			this.storeWindowBounds();
+		}, BOUNDS_DEBOUNCE_MS);
 	}
 
 	storeWindowBounds() {
@@ -427,38 +627,80 @@ class MultiChatApp {
 	}
 
 	updateTrayBadgeCounter() {
+		if (!this.tray) return;
 		let counter = 0;
 		for (const id in this.instances)
 			counter += this.instances[id].unread;
 
 		if (counter == 0) {
-			this.tray.setImage(this.baseIcon);
+			this.tray.setImage(fs.existsSync(this.trayIcon)
+				? nativeImage.createFromPath(this.trayIcon)
+				: nativeImage.createFromPath(this.baseIcon));
 			this.tray.setToolTip(Constants.appName);
 			return;
 		}
-		this.tray.setToolTip(`${Constants.appName} — ${counter} unread`);
+		this.tray.setToolTip(`${Constants.appName} — ${counter} não lidas`);
 		if (this.sidebarView)
 			this.sidebarView.webContents.send(Constants.event.buildBadgeIcon, counter);
 	}
 
 	reloadCurrentView() {
 		if (!this.activeId) return;
-		const v = this.instances[this.activeId].view;
-		v.webContents.reload();
-		setTimeout(() => {
-			v.webContents.send(Constants.event.initWhatsAppInstance, {
-				id: this.activeId,
-				name: this.instances[this.activeId].name,
-				constants: Constants
-			});
-		}, 1500);
+		const inst = this.instances[this.activeId];
+		if (!inst || !inst.view) return;
+		inst.view.webContents.reload();
+		// O evento de reinicialização do preload é enviado pelo did-finish-load,
+		// já com o tipo correto da conta (ver createAccountView).
 	}
 
 	openDevTools() {
-		if (this.activeId && this.instances[this.activeId])
+		if (this.activeId && this.instances[this.activeId] && this.instances[this.activeId].view)
 			this.instances[this.activeId].view.webContents.openDevTools({ mode: "detach" });
 		else if (this.sidebarView)
 			this.sidebarView.webContents.openDevTools({ mode: "detach" });
+	}
+
+	// ── Compartilhamento de tela ──
+	openScreenSharePicker() {
+		if (this.sharePicker && !this.sharePicker.isDestroyed()) {
+			this.sharePicker.show();
+			this.sharePicker.focus();
+			return;
+		}
+		this.sharePicker = new BrowserWindow({
+			width: 720,
+			height: 540,
+			minWidth: 480,
+			minHeight: 360,
+			parent: this.window,
+			modal: true,
+			show: false,
+			autoHideMenuBar: true,
+			title: "Compartilhar tela",
+			backgroundColor: "#111b21",
+			icon: this.baseIcon,
+			webPreferences: {
+				preload: path.join(__dirname, "screenshare-preload.js"),
+				contextIsolation: true,
+				nodeIntegration: false
+			}
+		});
+		this.sharePicker.loadFile(path.join(__dirname, "screenshare.html"));
+		this.sharePicker.once("ready-to-show", () => this.sharePicker.show());
+		this.sharePicker.on("closed", () => { this.sharePicker = null; });
+		// Se o usuário fechar a janela sem escolher, cancela o pedido pendente
+		this.sharePicker.on("close", () => {
+			if (this.shareCurrent) {
+				try { this.shareCurrent.callback(null); } catch (e) {}
+				this.shareCurrent = null;
+			}
+		});
+	}
+
+	closeSharePicker() {
+		if (this.sharePicker && !this.sharePicker.isDestroyed())
+			this.sharePicker.close();
+		this.sharePicker = null;
 	}
 
 	showHide(hide = true) {
@@ -492,7 +734,20 @@ app.on('second-instance', () => {
 	ws.showHide(false);
 });
 
+app.on('activate', () => {
+	// macOS: clique no ícone do Dock reabre a janela
+	ws.showHide(false);
+});
+
+app.on('before-quit', () => {
+	ws.isQuit = true;
+	if (ws.sharePicker && !ws.sharePicker.isDestroyed())
+		ws.sharePicker.destroy();
+});
+
 app.on('window-all-closed', () => {
-	if (ws.isQuit)
+	// No macOS o app continua no Dock; nas outras plataformas encerra
+	// apenas quando pedido via menu/tray (isQuit).
+	if (process.platform !== 'darwin' && ws.isQuit)
 		app.quit();
 });

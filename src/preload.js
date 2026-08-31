@@ -2,31 +2,40 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 let Constants = null;
 
-const BADGE_ICON_SRC = "file://" + require('path').join(__dirname, "../assets/icon.png");
+const BADGE_ICON_SRC = "file://" + require('path').join(__dirname, "../assets/icon-32.png");
 
-// Draw the tray badge icon (count on the app logo) and send dataURL back
+// Desenha o badge do tray (contador sobre o logo) e devolve um dataURL.
+// A fonte e o círculo escalam com o tamanho real do ícone (em vez de fixo
+// em 512px), e o contador é limitado a 999+ para não transbordar.
 const buildBadgeIcon = (counter) => {
-	var image = new Image();
-	image.setAttribute('crossorigin', 'anonymous');
+	const label = counter > 999 ? '999+' : String(counter);
+	const image = new Image();
 	image.onload = () => {
+		const size = image.width || 32;
 		var canvas = document.createElement("canvas");
 		var ctx = canvas.getContext("2d");
-		canvas.width = image.width;
-		canvas.height = image.height;
-		ctx.drawImage(image, 0, 0, image.width, image.height);
-		var centerX = (canvas.width * .75) - 2;
-		var centerY = (canvas.height * .25) + 2;
-		var radius = 128;
+		canvas.width = size;
+		canvas.height = size;
+		ctx.drawImage(image, 0, 0, size, size);
+
+		const radius = Math.max(8, size * 0.40);
+		const centerX = (size * .75) - (size * .02);
+		const centerY = (size * .25) + (size * .02);
 		ctx.beginPath();
 		ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
 		ctx.fillStyle = '#ff3333';
 		ctx.fill();
-		ctx.lineWidth = 2;
+		ctx.lineWidth = Math.max(1, size / 16);
 		ctx.strokeStyle = '#003300';
 		ctx.stroke();
-		ctx.font = 'bold 200px Arial';
+
+		const fontSize = radius * (label.length >= 3 ? 0.95 : 1.25);
+		ctx.font = `bold ${Math.round(fontSize)}px Arial`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
 		ctx.fillStyle = '#ffffff';
-		ctx.fillText(String(counter), centerX - (counter >= 10 ? 110 : 55), centerY + 70);
+		ctx.fillText(label, centerX, centerY + fontSize * .06);
+
 		var data = canvas.toDataURL("image/png");
 		ipcRenderer.send(Constants.event.updateBadgeIcon, data);
 	};
@@ -50,10 +59,6 @@ contextBridge.exposeInMainWorld("electron", {
 	onSidebarState: (cb) => ipcRenderer.on(Constants.event.sidebarState, (e, collapsed) => cb(collapsed)),
 
 	reloadAccounts: (cb) => ipcRenderer.on(Constants.event.reloadAccounts, cb),
-	onUpdateUnread: (cb) => ipcRenderer.on(Constants.event.updateUnread, cb),
-	onActiveAccount: (cb) => ipcRenderer.on(Constants.event.activeAccount, (e, id) => cb(id)),
-
-	getShareSources: () => ipcRenderer.invoke(Constants.event.getShareSources),
-	setShareSelected: (id) => ipcRenderer.send(Constants.event.setShareSelected, id),
-	setShareCancelled: () => ipcRenderer.send(Constants.event.setShareCancelled)
+	onUpdateUnread: (cb) => ipcRenderer.on(Constants.event.updateUnread, (e, data) => cb(data)),
+	onActiveAccount: (cb) => ipcRenderer.on(Constants.event.activeAccount, (e, id) => cb(id))
 });

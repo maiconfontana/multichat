@@ -1,4 +1,3 @@
-
 name: Build and Release
 
 on:
@@ -14,7 +13,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout Repositiry
+      - name: Checkout Repositório
         uses: actions/checkout@v4
 
       - name: Setup node.js
@@ -38,7 +37,7 @@ jobs:
       - name: Build Windows
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run:
+        run: |
           npm run dist:windows -- --publish=never
 
       - name: Upload Packages
@@ -49,7 +48,7 @@ jobs:
             dist/MultiChat-*.tar.xz
             dist/MultiChat-*.AppImage
             dist/MultiChat-*-win.zip
-            dist/MultiChat-*.exe
+            dist/MultiChat-*-setup.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -58,8 +57,46 @@ jobs:
             dist/MultiChat-*.tar.xz
             dist/MultiChat-*.AppImage
             dist/MultiChat-*-win.zip
-            dist/MultiChat-*.exe
+            dist/MultiChat-*-setup.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-          
+
+  build-macos:
+    runs-on: macos-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repositório
+        uses: actions/checkout@v4
+
+      - name: Setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: 'npm'
+
+      - name: Install Deps
+        run: npm ci
+
+      - name: Build macOS (x64 + arm64)
+        run: |
+          npm run dist:mac -- --publish=never
+
+      - name: Upload Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts-macos
+          path: |
+            dist/MultiChat-*.dmg
+            dist/MultiChat-*-mac*.zip
+
+      - name: Add macOS artifacts to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MultiChat-*.dmg
+            dist/MultiChat-*-mac*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

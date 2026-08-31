@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="vendor/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="vendor/bootstrap-icons.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: #111b21;
+      color: #e9edef;
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    .modal { position: static; display: block; z-index: auto; }
+    .card { background: #202c33; border-color: #2a3942; cursor: pointer; }
+    .card.selected { border-color: #00a884; box-shadow: 0 0 0 2px #00a88466; }
+    .card:hover { border-color: #00a88488; }
+    .card img { height: 110px; object-fit: cover; }
+    .card .form-check-input { pointer-events: none; }
+    .btn-outline-success { --bs-btn-color: #00a884; --bs-btn-border-color: #00a884; --bs-btn-hover-bg: #00a884; --bs-btn-hover-border-color: #00a884; --bs-btn-hover-color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="modal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+        <div class="modal-header py-2">
+          <h1 class="modal-title fs-5"><i class="bi bi-display"></i> Compartilhar tela</h1>
+        </div>
+        <div class="modal-body">
+          <div class="btn-group mb-3" role="group">
+            <input type="radio" class="btn-check" name="share-kind" id="kind-screen" checked>
+            <label class="btn btn-outline-success" for="kind-screen"><i class="bi bi-display"></i> Telas</label>
+            <input type="radio" class="btn-check" name="share-kind" id="kind-window">
+            <label class="btn btn-outline-success" for="kind-window"><i class="bi bi-window-stack"></i> Janelas</label>
+          </div>
+          <div id="picker-list" class="row row-cols-2 row-cols-md-3 g-2" style="max-height: 46vh; overflow-y: auto;"></div>
+          <div id="picker-empty" class="text-center text-secondary py-4" style="display:none;">
+            <i class="bi bi-display" style="font-size: 34px;"></i><br>Nenhuma fonte disponível.
+          </div>
+        </div>
+        <div class="modal-footer py-2 border-secondary">
+          <button type="button" class="btn btn-secondary" id="btn-share-cancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btn-share-ok" style="background:#00a884; border-color:#00a884;" disabled>Compartilhar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/bootstrap.bundle.min.js"></script>
+  <script>
+    let sources = [];
+    let selectedId = null;
+
+    const $list = document.getElementById("picker-list");
+    const $empty = document.getElementById("picker-empty");
+    const $ok = document.getElementById("btn-share-ok");
+
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    const kind = () => document.getElementById("kind-screen").checked ? "screen" : "window";
+
+    const render = () => {
+      const k = kind();
+      const visible = sources.filter(s => s.id.indexOf(k) !== -1);
+      $list.innerHTML = "";
+      $empty.style.display = visible.length ? "none" : "block";
+      selectedId = null;
+      $ok.disabled = true;
+      for (const src of visible) {
+        const col = document.createElement("div");
+        col.className = "col";
+        col.innerHTML = `
+          <div class="card h-100" data-id="${esc(src.id)}">
+            <img src="${src.thumb}" class="card-img-top" alt="">
+            <div class="card-body py-2 ps-2 pe-2 d-flex align-items-center gap-2">
+              <input class="form-check-input mt-0" type="radio" name="share-id" id="r-${esc(src.id)}" value="${esc(src.id)}">
+              <label class="form-check-label small text-truncate" for="r-${esc(src.id)}" title="${esc(src.name)}">${esc(src.name)}</label>
+            </div>
+          </div>`;
+        col.querySelector(".card").addEventListener("click", () => {
+          $list.querySelectorAll(".card").forEach(c => c.classList.remove("selected"));
+          col.querySelector(".card").classList.add("selected");
+          col.querySelector("input").checked = true;
+          selectedId = src.id;
+          $ok.disabled = false;
+        });
+        col.querySelector("input").addEventListener("click", (e) => e.stopPropagation());
+        $list.appendChild(col);
+      }
+    };
+
+    document.querySelectorAll('input[name="share-kind"]').forEach(el => el.addEventListener("change", render));
+
+    window.electron.getShareSources().then((list) => {
+      sources = list || [];
+      render();
+    }).catch(() => { $empty.style.display = "block"; });
+
+    $ok.addEventListener("click", () => {
+      if (selectedId) window.electron.setShareSelected(selectedId);
+    });
+
+    document.getElementById("btn-share-cancel").addEventListener("click", () => {
+      window.electron.setShareCancelled();
+    });
+  </script>
+</body>
+</html>

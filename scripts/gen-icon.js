@@ -1,31 +1,75 @@
-// Gera assets/icon.png (e variações) a partir de um SVG inline, usando o Electron local.
+// Gera derivados do ícone do app a partir do PNG mestre (512px):
+//   icon-256.png, icon-128.png, icon-32.png e icon.ico (container ICO
+//   com PNGs embutidos — formato suportado pelo Windows Vista+).
+// Segurança: se um resize resultar em buffer vazio, o arquivo NÃO é
+// sobrescrito (evita destruir ícones bons em ambientes onde o
+// rasterizador falha).
 const { app, nativeImage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#34d399"/>
-      <stop offset="1" stop-color="#059669"/>
-    </linearGradient>
-  </defs>
-  <path fill="url(#g)" d="M356 88H156c-41.4 0-75 33.6-75 75v150c0 41.4 33.6 75 75 75h60v75c0 21.9 25.1 33.5 41.6 19.3l64.1-54.3c10.3-8.7 25.5-13 40.8-13h33.5c41.4 0 75-33.6 75-75V163c0-41.4-33.6-75-75-75z"/>
-  <circle fill="#ffffff" cx="176" cy="238" r="28"/>
-  <circle fill="#ffffff" cx="256" cy="238" r="28"/>
-  <circle fill="#ffffff" cx="336" cy="238" r="28"/>
-</svg>`;
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+const PNG_SIZES = [256, 128, 32];
 
-const svgScaled = (s) => svg.replace('viewBox="0 0 512 512"', `width="${s}" height="${s}" viewBox="0 0 512 512"`);
+// Monta um arquivo .ICO usando entradas PNG (aceito pelo Windows).
+const buildIco = (pngBuffers) => {
+	const count = pngBuffers.length;
+	const header = Buffer.alloc(6);
+	header.writeUInt16LE(0, 0);
+	header.writeUInt16LE(1, 2);
+	header.writeUInt16LE(count, 4);
+
+	const entries = [];
+	let offset = 6 + 16 * count;
+	pngBuffers.forEach(({ size, buf }) => {
+		const e = Buffer.alloc(16);
+		e[0] = size >= 256 ? 0 : size;
+		e[1] = size >= 256 ? 0 : size;
+		e.writeUInt16LE(1, 4);
+		e.writeUInt16LE(32, 6);
+		e.writeUInt32LE(buf.length, 8);
+		e.writeUInt32LE(offset, 12);
+		offset += buf.length;
+		entries.push(e);
+	});
+
+	return Buffer.concat([header, ...entries, ...pngBuffers.map(p => p.buf)]);
+};
 
 app.whenReady().then(() => {
 	const assets = path.join(__dirname, "..", "assets");
-	const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svg).toString("base64");
-	const img = nativeImage.createFromDataURL(dataUrl);
-	const png512 = img.resize({ width: 512, height: 512 });
-	fs.writeFileSync(path.join(assets, "icon.png"), png512.toPNG());
-	fs.writeFileSync(path.join(assets, "icon-256.png"), img.resize({ width: 256, height: 256 }).toPNG());
-	fs.writeFileSync(path.join(assets, "icon-128.png"), img.resize({ width: 128, height: 128 }).toPNG());
-	console.log("Ícones gerados:", ["icon.png", "icon-256.png", "icon-128.png"].map(f => path.join(assets, f)));
+	const masterPath = path.join(assets, "icon.png");
+	const master = nativeImage.createFromPath(masterPath);
+
+	if (master.isEmpty()) {
+		console.error(`Ícone mestre inválido ou vazio: ${masterPath}`);
+		app.exit(1);
+		return;
+	}
+
+	const written = [`icon.png (mestre, ${master.getSize().width}px)`];
+
+	for (const size of PNG_SIZES) {
+		const png = master.resize({ width: size, height: size }).toPNG();
+		if (!png || png.length === 0) {
+			console.warn(`Aviso: resize ${size}px resultou vazio — mantendo arquivo existente.`);
+			continue;
+		}
+		fs.writeFileSync(path.join(assets, `icon-${size}.png`), png);
+		written.push(`icon-${size}.png`);
+	}
+
+	const pngs = ICO_SIZES
+		.map(size => ({ size, buf: master.resize({ width: size, height: size }).toPNG() }))
+		.filter(p => p.buf && p.buf.length > 0);
+
+	if (pngs.length > 0) {
+		fs.writeFileSync(path.join(assets, "icon.ico"), buildIco(pngs));
+		written.push(`icon.ico (${pngs.length} imagens)`);
+	} else {
+		console.warn("Aviso: não foi possível gerar o ICO (resizes vazios).");
+	}
+
+	console.log("Ícones ok:", written.join(", "));
 	app.quit();
 });

@@ -1,7 +1,7 @@
 {
   "name": "multichat",
   "desktopName": "multichat",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "MultiChat — Multi-account messenger desktop app",
   "author": "Diego Aguirre (DagMoller) — local fork",
   "license": "MIT",
@@ -9,11 +9,13 @@
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
+    "icons": "electron scripts/gen-icon.js",
     "clean": "rm -rf ./dist",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:linux": "electron-builder --linux --x64",
-    "dist:windows": "electron-builder --windows --x64"
+    "dist:windows": "electron-builder --windows --x64",
+    "dist:mac": "electron-builder --mac --arm64 --x64"
   },
   "build": {
     "appId": "com.maiconfontana.multichat",
@@ -32,19 +34,24 @@
       "target": [
         { "target": "AppImage", "arch": ["x64"] },
         { "target": "tar.xz", "arch": ["x64"] }
-      ],
-      "asarUnpack": [
-        "**/assets/*.svg",
-        "**/assets/*.png"
       ]
     },
     "win": {
       "icon": "assets/icon.ico",
-      "target": ["portable", "zip"],
-      "signExecutable": false,
-      "asarUnpack": [
-        "**/assets/*.svg",
-        "**/assets/*.png"
+      "target": ["nsis", "zip"],
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "MultiChat-${version}-setup.${ext}"
+    },
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.social-networking",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ]
     },
     "protocols": [
