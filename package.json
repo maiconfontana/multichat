@@ -1,15 +1,11 @@
 {
-  "name": "whatsapp-electron",
-  "desktopName": "com.github.dagmoller.whatsapp-electron",
-  "version": "1.2.10",
-  "description": "DagMoller's WhatsApp Electron Multi-Account App",
-  "author": "Diego Aguirre (DagMoller)",
-  "license": "ISC",
-  "keywords": [
-    "whatsapp",
-    "electron",
-    "multi-account"
-  ],
+  "name": "multichat",
+  "desktopName": "multichat",
+  "version": "1.4.0",
+  "description": "MultiChat — Multi-account messenger desktop app",
+  "author": "Diego Aguirre (DagMoller) — local fork",
+  "license": "MIT",
+  "keywords": ["multichat", "electron", "multi-account", "messenger"],
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
@@ -20,13 +16,22 @@
     "dist:windows": "electron-builder --windows --x64"
   },
   "build": {
+    "appId": "com.maiconfontana.multichat",
+    "productName": "MultiChat",
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
     "linux": {
-      "appId": "WhatsApp Electron",
-      "icon": "./src/assets/whatsapp-icon-512x512.png",
+      "icon": "assets/icon.png",
       "category": "Network",
       "target": [
-        "AppImage",
-        "tar.xz"
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "tar.xz", "arch": ["x64"] }
       ],
       "asarUnpack": [
         "**/assets/*.svg",
@@ -34,12 +39,8 @@
       ]
     },
     "win": {
-      "appId": "WhatsApp Electron",
-      "icon": "./src/assets/whatsapp-icon-512x512.png",
-      "target": [
-        "portable",
-        "zip"
-      ],
+      "icon": "assets/icon.ico",
+      "target": ["portable", "zip"],
       "signExecutable": false,
       "asarUnpack": [
         "**/assets/*.svg",
@@ -49,9 +50,7 @@
     "protocols": [
       {
         "name": "WhatsApp",
-        "schemes": [
-          "whatsapp"
-        ]
+        "schemes": ["whatsapp"]
       }
     ]
   },

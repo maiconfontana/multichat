@@ -1,28 +1,28 @@
-# WhatsApp Electron
-WhatsApp Client built on Electron with multi-account support!<br>
-Tested on Linux and Windows.
+# MultiChat
+Client desktop multi-conta para mensageiros web (WhatsApp, Teams, Telegram, Discord, Slack e URLs personalizadas), construído em Electron!
+Testado em Linux e Windows.
 
-## Compilation and Usage
+## Compilação e uso
 
-Requires:
+Requisitos:
 
 - Nodejs **>= v24**
 - npm
 - git
 
-Run:
+Executar:
 
 ```bash
 
-# Clone the repo
+# Clone do repositório
 git clone https://github.com/dagmoller/whatsapp-electron.git
 
-# Move to whatsapp-electron directory
+# Vá para o diretório do projeto
 cd whatsapp-electron
 
-# Install dependencies
+# Instale as dependências
 npm install
 
-# Start the app
+# Inicie o app
 npm run start
 ```

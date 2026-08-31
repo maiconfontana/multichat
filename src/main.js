@@ -1,113 +1,61 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, MenuItem, desktopCapturer, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
 
-// Single Electron Instance
 if (!app.requestSingleInstanceLock()) {
 	app.quit();
-	return;
+	process.exit(0);
 }
 
-for (const arg of process.argv)
-{
-	if (arg.startsWith("--disable-gpu"))
-	{
-		console.log("WhatsApp Electron: Disabling GPU by --disable-gpu argument")
+for (const arg of process.argv) {
+	if (arg.startsWith("--disable-gpu")) {
+		console.log("MultiChat: Disabling GPU by --disable-gpu argument");
 		app.disableHardwareAcceleration();
 		app.commandLine.appendSwitch('disable-gpu');
 		app.commandLine.appendSwitch('disable-gpu-compositing');
 	}
 }
 
-class WhatsAppElectron
-{
+class MultiChatApp {
 	constructor() {
 		this.store      = new Store();
-		this.baseIcon   = !app.isPackaged ? path.join(__dirname, "../assets/whatsapp-icon-512x512.png") : path.join(process.resourcesPath, "app.asar.unpacked/assets/whatsapp-icon-512x512.png");
+		this.baseIcon   = path.join(__dirname, "../assets/icon.png");
 		this.isQuit     = false;
 		this.spellLangs = ["en-US", "pt-BR"];
+		this.activeId   = null;
+		this.shareCurrent = null;
+		this.sidebarCollapsed = this.store.get("sidebarCollapsed", false);
 
 		this.bounds = this.store.get("bounds");
-		if (this.bounds == undefined)
-		{
-			this.bounds = {width: 1024, height: 768, x: null, y: null};
+		if (this.bounds == undefined) {
+			this.bounds = { width: 1024, height: 768, x: null, y: null };
 			this.store.set("bounds", this.bounds);
 		}
 
 		this.accounts  = this.store.get("accounts");
 		this.instances = {};
-		if (this.accounts == undefined)
-		{
-			this.accounts = [{id: "default", name: "Default Account"}];
+		if (this.accounts == undefined) {
+			this.accounts = [{ id: "default", name: "Default Account" }];
 			this.store.set("accounts", this.accounts);
 		}
 
 		this.menuTemplate = [
 			{
-				label: "WhatsApp",
+				label: "MultiChat",
 				submenu: [
-					{
-						label: "Accounts",
-						enabled: true,
-						accelerator: "Alt+a",
-						click: () => {
-							this.removeViews();
-							this.window.setTitle(`${Constants.appName} :: Accounts`);
-						}
-					}
+					{ label: "Reload Current Account", accelerator: "Ctrl+R", click: () => { this.reloadCurrentView(); } },
+					{ label: "Open DevTools (Account)", accelerator: "Ctrl+Shift+I", click: () => { this.openDevTools(); } },
+					{ type: "separator" },
+					{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
 				]
 			},
 			{
 				label: 'Help',
-				submenu:
-				[
-					{
-						label: "Version undefined by me",
-						enabled: false
-					},
+				submenu: [
+					{ label: "Version undefined by me", enabled: false },
 					{ type: 'separator' },
-					{
-						label: 'Open Development Tool',
-						accelerator: "Ctrl+Shift+I",
-						click: () => {
-							const views = this.window.contentView.children;
-							if (views.length > 0)
-								views[views.length - 1].webContents.openDevTools();
-							else
-								this.window.webContents.openDevTools();
-						}
-					},
-					{
-						label: "Force Reload (instance)",
-						accelerator: "Ctrl+R",
-						click: () => {
-							const views = this.window.contentView.children;
-							if (views.length > 0)
-							{
-								const view = views[views.length - 1];
-								view.webContents.reload();
-								setTimeout(() => {
-									view.webContents.send(Constants.event.initWhatsAppInstance, {id: view._id, name: view._name, constants: Constants});
-								}, 1000);
-							}
-							else
-							{
-								this.window.webContents.reload();
-								setTimeout(() => {
-									this.window.webContents.send(Constants.event.initResources, {constants: Constants});
-								}, 1000);
-							}
-						}
-					},
-					{ type: 'separator' },
-					{
-						label: "Quit",
-						click: () => {
-							this.isQuit = true;
-							app.quit();
-						}
-					}
+					{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
 				]
 			}
 		];
@@ -115,7 +63,6 @@ class WhatsAppElectron
 
 	_initElectronApp() {
 		app.userAgentFallback = Constants.whatsapp.userAgent;
-		
 		if (process.platform == "win32")
 			app.setAppUserModelId(Constants.appName);
 	}
@@ -123,405 +70,360 @@ class WhatsAppElectron
 	init() {
 		this._initElectronApp();
 
-		// spell langs
 		let langs = [];
-		for (const arg of process.argv)
-		{
+		for (const arg of process.argv) {
 			if (arg.startsWith("--spell-lang"))
-			{
-				const lang = arg.split("=")[1];
-				langs.push(lang);
-			}
+				langs.push(arg.split("=")[1]);
 		}
 		if (langs.length > 0)
 			this.spellLangs = langs;
-		console.log(`WhatsApp Electron: Spell Check Enabled Languages: ${this.spellLangs}`);
-		
+		console.log(`MultiChat: Spell Check: ${this.spellLangs}`);
+
+		this.registerEvents();
 		this.createWindow();
+		this.createSidebarView();
 
 		for (const item of this.accounts)
-			this.createView(item.id, item.name);
+			this.createAccountView(item);
 
-		// set version on menu
 		this.menuTemplate[1].submenu[0].label = `Version ${Constants.version} (Electron@${process.versions.electron})`;
-
 		this.menu = Menu.buildFromTemplate(this.menuTemplate);
 		Menu.setApplicationMenu(this.menu);
 
 		if (this.accounts.length > 0)
-			this.setCurrentViewByIdx(0);
+			this.setCurrentView(this.accounts[0].id);
 
-		const menu = Menu.buildFromTemplate([
-			{label: "Show/Hide", click: () => { this.showHide(); }},
-			{type: "separator"},
-			{label: "Quit", click: () => { this.isQuit = true; app.quit(); }}
+		const trayMenu = Menu.buildFromTemplate([
+			{ label: "Show/Hide", click: () => { this.showHide(); } },
+			{ type: "separator" },
+			{ label: "Quit", click: () => { this.isQuit = true; app.quit(); } }
 		]);
-
 		this.tray = new Tray(this.baseIcon);
-		this.tray.setContextMenu(menu);
+		this.tray.setContextMenu(trayMenu);
 		this.tray.setToolTip(Constants.appName);
 		this.tray.on("click", () => { this.showHide(); });
 
-		// Events
 		this.aciveNotifications = [];
+	}
+
+	registerEvents() {
 		ipcMain.on(Constants.event.newRendererNotification, (event, data) => {
-			//console.log("New Renderer Notification...", data);
+			const inst = this.instances[data.id];
+			if (!inst) return;
+
+			// Per-account notification setting
+			const notifEnabled = inst.notifications === undefined ? true : inst.notifications.enabled;
+			if (!notifEnabled) return;
+
+			const acctName = inst.name;
 			const n = new Notification({
-				title: `[${this.instances[data.id].name}] :: ${data.title}`,
+				title: `[${acctName}] :: ${data.title}`,
 				body: data.options.body,
-				icon: nativeImage.createFromDataURL(data.icon),
+				...(data.icon ? { icon: nativeImage.createFromDataURL(data.icon) } : {}),
 				urgency: "normal"
 			});
-			n.on("click", (event) => {
-				//console.log("Notification Clicked...", data.id, data.options.tag);
+			n.on("click", () => {
 				this.showHide(false);
 				this.setCurrentView(data.id);
-				this.instances[data.id].view.webContents.send(Constants.event.fireNotificationClick, data.options.tag);
+				if (this.instances[data.id])
+					this.instances[data.id].view.webContents.send(Constants.event.fireNotificationClick, data.options.tag);
 				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
 			});
-			n.on("close", (event) => {
+			n.on("close", () => {
 				this.aciveNotifications = this.aciveNotifications.filter(_n => _n !== n);
 			});
-			n.show();
-
 			this.aciveNotifications.push(n);
+			n.show();
+		});
+
+		ipcMain.on(Constants.event.updateBadgeIcon, (event, dataURL) => {
+			this.tray.setImage(nativeImage.createFromDataURL(dataURL));
 		});
 
 		ipcMain.on(Constants.event.updateUnreadMessages, (event, data) => {
-			//console.log("Unread Messages: ", data);
-			this.instances[data.id].unread = data.unread;
-			this.updateTrayBadgeCounter();
+			if (this.instances[data.id]) {
+				this.instances[data.id].unread = data.unread;
+				this.updateTrayBadgeCounter();
+			}
+			if (this.sidebarView)
+				this.sidebarView.webContents.send(Constants.event.updateUnread, data);
 		});
 
-		ipcMain.on(Constants.event.updateBadgeIcon, (event, data) => {
-			//console.log("Received updated badge icon...");
-			this.tray.setImage(nativeImage.createFromDataURL(data));
-		});
-		
-		ipcMain.on(Constants.event.reloadWhatsAppInstance, (envet, id) => {
-			console.log("WhatsApp Electron: Received reloadWhatsAppInstance...", id);
-			const bv = this.instances[id].view;
-			bv.webContents.reload();
-			setTimeout(() => {
-				bv.webContents.send(Constants.event.initWhatsAppInstance, {id: bv._id, name: bv._name, constants: Constants});
-			}, 1000);
-		});
-		ipcMain.on(Constants.event.clearWorkersAndReload, (envet, id) => {
-			console.log("WhatsApp Electron: Received clearWorkersAndReload...", id);
-			const ses = session.fromPartition(`persist:${id}`);
-			ses.flushStorageData();
-			ses.clearStorageData({ storages: ['serviceworkers'] });
-			
-			const bv = this.instances[id].view;
-			bv.webContents.reload();
-			setTimeout(() => {
-				bv.webContents.send(Constants.event.initWhatsAppInstance, {id: bv._id, name: bv._name, constants: Constants});
-			}, 1000);
-		});
-		
 		ipcMain.handle(Constants.event.getAccountsList, () => {
-			//console.log("From Renderer - getAccountsList", data);
-			return this.accounts;
+			return this.accounts.map(a => ({
+				id: a.id,
+				name: a.name,
+				type: a.type || "whatsapp",
+				url: a.url || (Constants.services[a.type || "whatsapp"] ? Constants.services[a.type || "whatsapp"].url : Constants.whatsapp.url),
+				notifications: a.notifications || { enabled: true },
+				unread: this.instances[a.id] ? this.instances[a.id].unread : 0,
+				active: this.activeId === a.id
+			}));
 		});
 
 		ipcMain.on(Constants.event.addAccount, (event, data) => {
-			//console.log("From Renderer - addAccount", data);
-			this.accounts.push(data);
+			const svc = Constants.services[data.type] || Constants.services.whatsapp;
+			const account = {
+				id: data.id,
+				name: data.name,
+				type: data.type || "whatsapp",
+				url: data.url || svc.url,
+				notifications: { enabled: data.notifications !== false }
+			};
+			this.accounts.push(account);
 			this.store.set("accounts", this.accounts);
-			this.createView(data.id, data.name);
-			
-			this.menu = Menu.buildFromTemplate(this.menuTemplate);
-			Menu.setApplicationMenu(this.menu);
-			
-			this.window.webContents.send(Constants.event.reloadAccounts);
+			this.createAccountView(account);
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+			this.setCurrentView(account.id);
 		});
-		
+
 		ipcMain.on(Constants.event.updateAccount, (event, data) => {
-			//console.log("From Renderer - updateAccount", data);
-			for (const idx in this.accounts)
-			{
-				if (this.accounts[idx].id == data.id)
-				{
-					this.accounts[idx].name = data.name;
-					this.store.set("accounts", this.accounts);
+			for (let i = 0; i < this.accounts.length; i++) {
+				if (this.accounts[i].id == data.id) {
+					this.accounts[i].name = data.name;
+					if (data.type != undefined) this.accounts[i].type = data.type;
+					if (data.url != undefined) this.accounts[i].url = data.url;
+					if (data.notifications != undefined) this.accounts[i].notifications = data.notifications;
 					break;
 				}
 			}
-			
-			this.instances[data.id].name = data.name;
-			this.instances[data.id].view._name = data.name;
-			
-			for (const item of this.menuTemplate[0].submenu)
-			{
-				if (item.id == data.id)
-				{
-					item.label = data.name;
-					break;
-				}
+			this.store.set("accounts", this.accounts);
+			if (this.instances[data.id]) {
+				this.instances[data.id].name = data.name;
+				if (data.notifications != undefined)
+					this.instances[data.id].notifications = data.notifications;
 			}
-			
-			this.menu = Menu.buildFromTemplate(this.menuTemplate);
-			Menu.setApplicationMenu(this.menu);
-			
-			this.window.webContents.send(Constants.event.reloadAccounts);
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 		});
-		
+
 		ipcMain.on(Constants.event.deleteAccount, (event, id) => {
-			//console.log("From Renderer - deleteAccount", id);
-			let toDelete = null;
-			for (let idx = 0; idx < this.accounts.length; idx++)
-			{
-				if (this.accounts[idx].id == id)
-				{
-					toDelete = idx;
-					break;
-				}
+			if (this.accounts.length <= 1) return;
+
+			let toDelete = -1;
+			for (let idx = 0; idx < this.accounts.length; idx++) {
+				if (this.accounts[idx].id == id) { toDelete = idx; break; }
 			}
-			
 			this.accounts.splice(toDelete, 1);
 			this.store.set("accounts", this.accounts);
-			
-			delete this.instances[id];
-			
-			this.menuTemplate[0].submenu.splice(toDelete + 2, 1);
-			for (let idx = 0; idx < this.menuTemplate[0].submenu.length; idx++)
-			{
-				if (this.menuTemplate[0].submenu[idx].type == "radio")
-				{
-					if (idx - 2 < 10)
-						this.menuTemplate[0].submenu[idx].accelerator = `Alt+${idx-1}`;
-						
-					if (idx - 2 == 10)
-						this.menuTemplate[0].submenu[idx].accelerator = `Alt+0`;
-						
-					if (idx - 2 > 10)
-						delete this.menuTemplate[0].submenu[idx].accelerator;
-				}
+
+			if (this.instances[id]) {
+				this.window.contentView.removeChildView(this.instances[id].view);
+				delete this.instances[id];
 			}
-			this.menu = Menu.buildFromTemplate(this.menuTemplate);
-			Menu.setApplicationMenu(this.menu);
-			
-			// remove storage path
+
 			const ses = session.fromPartition(`persist:${id}`);
 			ses.clearStorageData().then(() => {
 				const dir = ses.getStoragePath();
 				fs.rmSync(dir, { recursive: true, force: true });
 			});
-			
-			this.window.webContents.send(Constants.event.reloadAccounts);
+
+			if (this.activeId == id)
+				this.setCurrentView(this.accounts[0].id);
+
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 		});
-		
+
 		ipcMain.on(Constants.event.gotoAccount, (event, id) => {
-			//console.log("From Renderer - gotoAccount", id);
 			this.setCurrentView(id);
 		});
 
-		// screen share
-		ipcMain.handle(Constants.event.getShareSources, async () => {
-			const sources = await desktopCapturer.getSources({types: ["screen", "window"], thumbnailSize: {width: 400, height: 400}});
-			return sources.map(s => ({id: s.id, name: s.name, thumb: s.thumbnail.toDataURL()}));
+		ipcMain.on(Constants.event.toggleNotifications, (event, data) => {
+			const account = this.accounts.find(a => a.id === data.id);
+			if (!account) return;
+			account.notifications = {
+				enabled: data.enabled,
+				...((account.notifications || {}).body !== undefined ? { body: account.notifications.body } : {})
+			};
+			this.store.set("accounts", this.accounts);
+			if (this.instances[data.id])
+				this.instances[data.id].notifications = account.notifications;
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 		});
 
-		ipcMain.on(Constants.event.setShareSelected, (event, id) => {
-			desktopCapturer.getSources({types: ["screen", "window"]}).then((sources) => {
-				for (const src of sources)
-				{
-					if (src.id == id)
-						this.shareCurrent.callback({video: src, audio: "loopback"});
-				}
-				this.setCurrentView(this.shareCurrent.id);
-				this.shareCurrent = null;
-			});
-		});
-
-		ipcMain.on(Constants.event.setShareCancelled, () => {
-			try {
-				this.shareCurrent.callback({error: "cancelled by user"});
-			} catch {}
-			this.setCurrentView(this.shareCurrent.id);
-			this.shareCurrent = null;
+		ipcMain.on(Constants.event.toggleSidebar, () => {
+			this.sidebarCollapsed = !this.sidebarCollapsed;
+			this.store.set("sidebarCollapsed", this.sidebarCollapsed);
+			this.updateSidebarBounds();
+			for (const id in this.instances)
+				this.layoutAccountView(id);
 		});
 	}
 
 	createWindow() {
 		const options = {
-			width: this.bounds.width + Constants.offsets.window.width,
-			height: this.bounds.height + Constants.offsets.window.height,
+			width: this.bounds.width,
+			height: this.bounds.height,
 			icon: this.baseIcon,
-			webSecurity: false,
-			webPreferences: {
-				preload: path.join(__dirname, "preload.js")
-			},
 			show: !process.argv.includes("--start-in-tray")
 		};
-
-		if (this.bounds.x != null)
-		{
-			options.x = this.bounds.x + Constants.offsets.window.x;
-			options.y = this.bounds.y + Constants.offsets.window.y;
+		if (this.bounds.x != null) {
+			options.x = this.bounds.x;
+			options.y = this.bounds.y;
 		}
 
 		this.window = new BrowserWindow(options);
-		//this.window.loadFile(!app.isPackaged ? "accounts.html" : "./src/accounts.html");
-		this.window.loadFile("./src/accounts.html");
 
-		this.window.webContents.send(Constants.event.initResources, {constants: Constants});
+		if (this.bounds.x == null)
+			this.window.center();
 
-		if (this.spellLangs.length > 0)
-			this.window.webContents.session.setSpellCheckerLanguages(this.spellLangs);
+		// Don't load any file directly — the sidebar and account views
+		// will be added as child views of the window's contentView.
 
 		this.window.on("move", () => { this.storeWindowBounds(); });
 		this.window.on("resize", () => { this.storeWindowBounds(); });
-
 		this.window.on("close", (e) => {
-			if (this.isQuit)
-			{
-				app.quit();
-				return;
-			}
-
+			if (this.isQuit) { app.quit(); return; }
 			e.preventDefault();
 			this.window.hide();
 		});
-		
-		this.window.setTitle(`${Constants.appName} :: Accounts`);
-		
-		this.window.on("focus", () => {
-			const views = this.window.contentView.children;
-			if (views.length > 0)
-				views[views.length - 1].webContents.focus();
+	}
+
+	createSidebarView() {
+		this.sidebarView = new WebContentsView({
+			webPreferences: {
+				preload: path.join(__dirname, "preload.js"),
+				contextIsolation: true,
+				nodeIntegration: false
+			}
+		});
+		this.sidebarView.setBackgroundColor('#111b21');
+		this.sidebarView.webContents.loadFile(path.join(__dirname, "accounts.html"));
+		this.sidebarView.webContents.send(Constants.event.initResources, { constants: Constants });
+
+		// Sidebar is always first (z-order: bottom)
+		this.window.contentView.addChildView(this.sidebarView);
+		this.updateSidebarBounds();
+
+		// When sidebar finishes loading, notify it of the active account
+		this.sidebarView.webContents.on("did-finish-load", () => {
+			this.sidebarView.webContents.send(Constants.event.activeAccount, this.activeId);
+			// Send initial accounts list
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+			// Send initial collapsed state
+			this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
 		});
 	}
 
-	createView(id, name) {
-		console.log(`WhatsApp Electron: Creating WebContentsView Instance for "${name} (${id})"`);
-		this.instances[id] = {id: id, name: name, unread: 0, view: null};
+	createAccountView(account) {
+		const id = account.id;
+		const name = account.name;
+		const type = account.type || "whatsapp";
+		const url  = account.url || (Constants.services[type] ? Constants.services[type].url : Constants.whatsapp.url);
+		const preloadFile = Constants.services[type] ? Constants.services[type].preload : "whatsapp-preload.js";
+
+		console.log(`Creating account view for "${name} (${id})" [${type}]`);
+		this.instances[id] = {
+			id, name, type,
+			unread: 0,
+			notifications: account.notifications || { enabled: true },
+			view: null
+		};
 
 		const view = new WebContentsView({
 			webPreferences: {
 				partition: `persist:${id}`,
-				preload: path.join(__dirname, "whatsapp-preload.js"),
+				preload: path.join(__dirname, preloadFile),
 				spellcheck: true,
 				contextIsolation: false
 			}
 		});
 		this.instances[id].view = view;
 
-		// spell check
 		if (this.spellLangs.length > 0)
 			view.webContents.session.setSpellCheckerLanguages(this.spellLangs);
 
-		// screen share
 		view.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-			desktopCapturer.getSources({types: ["screen", "window"]}).then((sources) => {
-				this.shareCurrent = {id: id, callback: callback};
-				this.removeViews();
-				this.window.webContents.executeJavaScript(`showScreenShareModal('${id}');`);
+			desktopCapturer.getSources({ types: ["screen", "window"] }).then((sources) => {
+				this.shareCurrent = { id, callback };
+				if (this.sidebarView)
+					this.sidebarView.webContents.executeJavaScript(`showScreenShareModal('${id}');`);
 			});
-		}, {useSystemPicker: true});
+		}, { useSystemPicker: true });
 
 		view._id   = id;
 		view._name = name;
+		view._type = type;
+		view.setBackgroundColor('#ffffff');
+		view.webContents.loadURL(url, { userAgent: Constants.whatsapp.userAgent });
 
-		view.setBackgroundColor('white');
-		view.webContents.loadURL(Constants.whatsapp.url, { userAgent: Constants.whatsapp.userAgent });
 		view.webContents.setWindowOpenHandler((details) => {
-			const url = new URL(details.url);
-			if (url.hostname == "web.whatsapp.com" || url.hostname.endsWith(".whatsapp.com"))
-			{
-				return {
-					action: "allow",
-					overrideBrowserWindowOptions: {
-						parent: this.window,
-						show: true,
-						frame: true
-					}
-				}
-			}
+			// Allow the site's own windows/links, open everything else externally
+			try {
+				const host = new URL(details.url).hostname;
+				const baseHost = new URL(url).hostname;
+				if (host === baseHost || host.endsWith("." + baseHost))
+					return { action: "allow" };
+			} catch (e) {}
 			require('electron').shell.openExternal(details.url);
 			return { action: 'deny' };
 		});
-		
-		// init whatsapp instance afeter load finished
+
 		view.webContents.on("did-finish-load", () => {
-			console.log(`WhatsApp Electron: WebContentsView Instance for "${name} (${id})" has finished loading, initializing it...`);
-			view.webContents.send(Constants.event.initWhatsAppInstance, {id: id, name: name, constants: Constants});
+			console.log(`Account "${name} (${id})" [${type}] loaded`);
+			const initEvent = (preloadFile === "whatsapp-preload.js")
+				? Constants.event.initWhatsAppInstance
+				: Constants.event.initGenericInstance;
+			view.webContents.send(initEvent, { id, name, constants: Constants });
 		});
-		
-		let menuItem = {
-			id: id,
-			label: name,
-			type: "radio",
-			checked: false,
-			click: () => {
-				this.setCurrentView(id);
-			}
-		};
-		
-		if (this.menuTemplate[0].submenu.length == 1)
-			this.menuTemplate[0].submenu.push({type: "separator"});
-		
-		if (this.menuTemplate[0].submenu.length < (10 + 2))
-		{
-			const idx = this.menuTemplate[0].submenu.length - 1;
-			if (idx < 10)
-				menuItem.accelerator = `Alt+${idx}`;
-			if (idx == 10)
-				menuItem.accelerator = `Alt+0`;
+
+		// Start hidden — will be shown when set as current
+		view.setVisible(false);
+		this.window.contentView.addChildView(view);
+		this.layoutAccountView(id);
+	}
+
+	setCurrentView(id) {
+		const instance = this.instances[id];
+		if (!instance) return;
+
+		// Hide all account views, show only the active one
+		for (const aid in this.instances) {
+			this.instances[aid].view.setVisible(aid === id);
 		}
-		this.menuTemplate[0].submenu.push(menuItem);
+
+		this.activeId = id;
+		this.window.setTitle(`${Constants.appName} :: ${instance.name}`);
+		this.layoutAccountView(id);
+		instance.view.webContents.focus();
+
+		// Notify sidebar
+		if (this.sidebarView) {
+			this.sidebarView.webContents.send(Constants.event.activeAccount, id);
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+		}
 	}
 
 	setCurrentViewByIdx(idx) {
 		this.setCurrentView(this.accounts[idx].id);
 	}
 
-	setCurrentView(id) {
-		//console.log("setCurrentView:", id);
-		const instance = this.instances[id];
-
-		this.window.setTitle(`${Constants.appName} :: ${instance.name}`);
-		this.replaceView(instance.view);
-
-		if (this.menu != undefined)
-		{
-			for (const menu of this.menu.items[0].submenu.items)
-			{
-				if (menu.type == "radio" && menu.id == id)
-					menu.checked = true;
-			}
-		}
-
-		this.setViewBounds(id);
-		instance.view.webContents.focus();
+	getSidebarWidth() {
+		return this.sidebarCollapsed ? Constants.sidebar.collapsedWidth : Constants.sidebar.width;
 	}
 
-	setViewBounds(id, bounds = null) {
-		bounds = bounds == null ? this.bounds : bounds;
-		this.instances[id].view.setBounds({
-			x: 0 + Constants.offsets.view.x, 
-			y: 0 + Constants.offsets.view.y, 
-			width: bounds.width + Constants.offsets.view.width, 
-			height: bounds.height + Constants.offsets.view.height
-		});
+	layoutAccountView(id) {
+		const view = this.instances[id].view;
+		if (!view) return;
+		const w = this.window.getContentBounds().width;
+		const h = this.window.getContentBounds().height;
+		const sbw = this.getSidebarWidth();
+		view.setBounds({ x: sbw, y: 0, width: w - sbw, height: h });
 	}
 
-	removeViews() {
-		const views = this.window.contentView.children;
-		for (const view of views)
-			this.window.contentView.removeChildView(view);
-	}
-	replaceView(view) {
-		this.removeViews();
-		this.window.contentView.addChildView(view);
+	updateSidebarBounds() {
+		if (!this.sidebarView) return;
+		const h = this.window.getContentBounds().height;
+		const sbw = this.getSidebarWidth();
+		this.sidebarView.setBounds({ x: 0, y: 0, width: sbw, height: h });
+		this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
 	}
 
 	storeWindowBounds() {
 		this.bounds = this.window.getBounds();
 		this.store.set("bounds", this.bounds);
-
+		this.updateSidebarBounds();
 		for (const id in this.instances)
-			this.setViewBounds(id);
+			this.layoutAccountView(id);
 	}
 
 	updateTrayBadgeCounter() {
@@ -529,46 +431,57 @@ class WhatsAppElectron
 		for (const id in this.instances)
 			counter += this.instances[id].unread;
 
-		if (counter == 0)
-		{
+		if (counter == 0) {
 			this.tray.setImage(this.baseIcon);
-			return
+			this.tray.setToolTip(Constants.appName);
+			return;
 		}
+		this.tray.setToolTip(`${Constants.appName} — ${counter} unread`);
+		if (this.sidebarView)
+			this.sidebarView.webContents.send(Constants.event.buildBadgeIcon, counter);
+	}
 
-		this.window.webContents.send(Constants.event.buildBadgeIcon, counter);
+	reloadCurrentView() {
+		if (!this.activeId) return;
+		const v = this.instances[this.activeId].view;
+		v.webContents.reload();
+		setTimeout(() => {
+			v.webContents.send(Constants.event.initWhatsAppInstance, {
+				id: this.activeId,
+				name: this.instances[this.activeId].name,
+				constants: Constants
+			});
+		}, 1500);
+	}
+
+	openDevTools() {
+		if (this.activeId && this.instances[this.activeId])
+			this.instances[this.activeId].view.webContents.openDevTools({ mode: "detach" });
+		else if (this.sidebarView)
+			this.sidebarView.webContents.openDevTools({ mode: "detach" });
 	}
 
 	showHide(hide = true) {
-		if (!this.window.isFocused())
-		{
+		if (!this.window.isFocused()) {
 			if (this.window.isVisible())
-			{
 				this.window.focus();
-			}
-			else if (this.window.isMinimized())
-			{
+			else if (this.window.isMinimized()) {
 				this.window.restore();
 				this.window.focus();
-			}
-			else
-			{
+			} else {
 				this.window.show();
 				this.window.restore();
 				this.window.focus();
 			}
-		}
-		else
-		{
+		} else {
 			if (hide)
-			{
 				this.window.hide();
-			}
 		}
 	}
 }
 
 let Constants = {};
-const ws      = new WhatsAppElectron();
+const ws = new MultiChatApp();
 
 app.whenReady().then(() => {
 	Constants = require("./constants").init(app.getSystemLocale());

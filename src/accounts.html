@@ -1,128 +1,233 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- <title>WhatsApp Electron :: Accounts</title> -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-  </head>
-  <body>
-    <div class="container" style="width: 600px">
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: #111b21;
+      color: #e9edef;
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    #sb-root { display: flex; flex-direction: column; height: 100vh; }
 
-      <table class="m-auto mt-3 w-100">
-        <tr>
-          <td class="text-center w-25">
-            <img src="https://raw.githubusercontent.com/dagmoller/whatsapp-electron/main/assets/whatsapp-icon-512x512.png" style="width: 96px">
-          </td>
-          <td class="align-middle text-center">
-            <span><h2>WhatsApp Electron</h2></span>
-          </td>
-        </tr>
-      </table>
+    #sb-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 14px 10px 14px;
+      background: #202c33;
+      flex-wrap: nowrap;
+    }
+    #sb-header .logo { width: 32px; height: 32px; flex: 0 0 32px; }
+    #sb-header .title { font-size: 16px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
+    #sb-header .spacer { flex: 1; min-width: 0; }
+    .icon-btn {
+      background: transparent; color: #8696a0; border: none;
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 30px;
+    }
+    .icon-btn:hover { background: #374248; color: #e9edef; }
+    #btn-add {
+      background: #00a884; color: #fff; border: none;
+      width: 30px; height: 30px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 30px;
+    }
+    #btn-add:hover { background: #00c4a0; }
 
-      <div class="d-flex justify-content-between m-auto mt-4 border-bottom w-100">
-        <div>
-          <h5 class="pt-3 fw-bolder">Accounts</h5>
-        </div>
-        <div>
-          <button type="button" class="btn fs-4 acct-add" title="Add Account" data-bs-toggle="modal" data-bs-target="#accountModal" data-bs-action="new"><i class="bi bi-person-fill-add"></i></button>
-        </div>
-      </div>
+    #sb-list { flex: 1; overflow-y: auto; padding: 8px 6px; }
+    #sb-list::-webkit-scrollbar { width: 6px; }
+    #sb-list::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 3px; }
 
-      <table class="table m-auto mt-3 text-center w-100">
-        <thead>
-          <tr>
-            <th scope="col">#ID</th>
-            <th scope="col">Name/Description</th>
-            <th scope="col">Options</th>
-          </tr>
-        </thead>
-        <tbody class="align-middle acct-list">
-          <!-- Accounts List -->
-        </tbody>
-      </table>
+    .acct-item {
+      display: flex; align-items: center; gap: 11px;
+      padding: 9px 10px; border-radius: 9px; cursor: pointer;
+      position: relative; margin-bottom: 2px;
+    }
+    .acct-item:hover { background: #202c33; }
+    .acct-item.active { background: #2a3942; }
 
+    .acct-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      flex: 0 0 40px; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; position: relative;
+    }
+    .acct-avatar svg { width: 24px; height: 24px; }
+    .acct-meta { flex: 1; min-width: 0; }
+    .acct-name { font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acct-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8696a0; margin-top: 1px; }
+    .notif-off { font-size: 10px; }
+
+    .acct-unread {
+      background: #00a884; color: #fff; font-size: 12px; font-weight: 700;
+      min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+      display: none; align-items: center; justify-content: center;
+    }
+    .acct-unread.show { display: flex; }
+
+    /* Badge no canto do avatar (modo recolhido) */
+    .acct-unread-badge {
+      position: absolute; top: -5px; right: -5px;
+      background: #00a884; color: #fff; font-size: 11px; font-weight: 700;
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      display: none; align-items: center; justify-content: center;
+      box-sizing: border-box; z-index: 1;
+    }
+    .acct-unread-badge.show { display: flex; }
+
+    .acct-actions { display: none; gap: 1px; }
+    .acct-item:hover .acct-actions { display: flex; }
+    .acct-item:hover .acct-unread { display: none !important; }
+    .acct-actions button {
+      background: transparent; border: none; color: #8696a0;
+      font-size: 14px; padding: 4px; line-height: 1; cursor: pointer; border-radius: 6px;
+    }
+    .acct-actions button:hover { background: #374248; color: #e9edef; }
+
+    /* ── Modo recolhido (só ícones) ── */
+    body.collapsed #sb-header { flex-direction: column; padding: 10px 0 8px 0; gap: 8px; }
+    body.collapsed #sb-header .title { display: none; }
+    body.collapsed #sb-header .spacer { display: none; }
+    body.collapsed #sb-list { padding: 6px; }
+    body.collapsed .acct-item { justify-content: center; padding: 8px 0; }
+    body.collapsed .acct-item .acct-meta { display: none; }
+    body.collapsed .acct-item .acct-unread { display: none !important; }
+    body.collapsed .acct-item .acct-actions { display: none !important; }
+    body.collapsed #sb-empty { font-size: 12px; padding: 30px 4px; }
+    body.collapsed #sb-empty i { font-size: 26px; }
+
+    #sb-empty { display: none; text-align: center; color: #8696a0; padding: 40px 20px; font-size: 14px; }
+    #sb-empty i { font-size: 40px; display: block; margin-bottom: 12px; opacity: .5; }
+
+    /* Modal form */
+    .form-check-input { background: #111b21; border-color: #2a3942; }
+    .form-check-input:checked { background-color: #00a884; border-color: #00a884; }
+    .form-label { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="sb-root">
+    <div id="sb-header">
+      <img class="logo" src="../assets/icon.png" alt="">
+      <span class="title">MultiChat</span>
+      <span class="spacer"></span>
+      <button id="btn-toggle-sidebar" class="icon-btn" type="button" title="Recolher/expandir sidebar"><i class="bi bi-list"></i></button>
+      <button id="btn-add" type="button" title="Adicionar conta/mensageiro"><i class="bi bi-plus-lg"></i></button>
     </div>
 
-    <div class="modal fade" id="accountModal" tabindex="-1" aria-labelledby="accountModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header py-2">
-            <h1 class="modal-title fs-5" id="accountModalLabel">Account</h1>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <form id="accountForm" novalidate>
-              <input type="hidden" id="acct-action" value="">
-              <input type="hidden" id="acct-id" value="">
-              <div class="mb-3">
-                <label for="acct-name" class="col-form-label">Account Name:</label>
-                <input type="text" class="form-control" id="acct-name" required>
-                <div class="invalid-feedback">Account name is required!</div>
-              </div>
-            </form>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary acct-save">OK</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header py-2">
-            <h1 class="modal-title fs-5" id="deleteModalLabel">Remove Account</h1>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p>Do you realy want to remove account <span id="acct-account-remove-name"></span>?</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
-            <button type="button" class="btn btn-primary" id="acct-delete-button">Yes</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div id="sb-list"></div>
+    <div id="sb-empty"><i class="bi bi-chat-dots"></i>Nenhuma conta ainda.<br>Toque no <b>+</b> para adicionar.</div>
+  </div>
 
-    <div class="modal fade" id="screenShareModal" tabindex="-1" aria-labelledby="screenShareModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header py-2">
-            <h1 class="modal-title fs-5" id="screenShareModalLabel">Screen Share</h1>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <p class="d-inline-flex justify-content-center w-100 mb-0">
-              <button type="button" class="btn btn-light border me-2 btn-share-type" data-bs-toggle="button" data-bs-target="#share-screens">Screens</button>
-              <button type="button" class="btn btn-light border ms-2 btn-share-type" data-bs-toggle="button" data-bs-target="#share-windows">Windows</button>
-            </p>
-            <hr>
-            <div id="share-screens" class="collapse row mx-auto"></div>
-            <div id="share-windows" class="collapse row mx-auto">
-              <div class="row w-100">
-                <div class="col" id="share-windows-radios"></div>
-                <div class="col text-center">
-                  <img id="share-windows-thumb" class="border" src="https://raw.githubusercontent.com/dagmoller/whatsapp-electron/main/assets/whatsapp-icon-512x512.png" style="max-width: 300px;">
-                </div>
+  <!-- Modal Adicionar / Editar -->
+  <div class="modal fade" id="accountModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+        <div class="modal-header py-2 border-secondary">
+          <h1 class="modal-title fs-6" id="accountModalLabel">Nova conta</h1>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <form id="accountForm" novalidate>
+            <input type="hidden" id="acct-action" value="">
+            <input type="hidden" id="acct-id" value="">
+
+            <div class="mb-2">
+              <label for="acct-type" class="form-label mb-1">Tipo de serviço:</label>
+              <select class="form-select form-select-sm" id="acct-type" style="background:#111b21; color:#e9edef; border-color:#2a3942;">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="teams">Microsoft Teams</option>
+                <option value="telegram">Telegram</option>
+                <option value="discord">Discord</option>
+                <option value="slack">Slack</option>
+                <option value="custom">Personalizado (URL)</option>
+              </select>
+            </div>
+
+            <div class="mb-2">
+              <label for="acct-name" class="form-label mb-1">Nome / Descrição:</label>
+              <input type="text" class="form-control form-control-sm" id="acct-name" style="background:#111b21; color:#e9edef; border-color:#2a3942;" placeholder="Ex: Pessoal, Trabalho..." required>
+              <div class="invalid-feedback text-danger">O nome é obrigatório!</div>
+            </div>
+
+            <div class="mb-2" id="url-group" style="display:none;">
+              <label for="acct-url" class="form-label mb-1">URL:</label>
+              <input type="url" class="form-control form-control-sm" id="acct-url" style="background:#111b21; color:#e9edef; border-color:#2a3942;" placeholder="https://...">
+            </div>
+
+            <div class="form-check form-switch mt-3">
+              <input class="form-check-input" type="checkbox" id="acct-notif-switch" checked>
+              <label class="form-check-label" for="acct-notif-switch" style="font-size:13px;">Notificações desktop</label>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer py-2 border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-primary acct-save" style="background:#00a884; border-color:#00a884;">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Remover -->
+  <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+        <div class="modal-header py-2 border-secondary">
+          <h1 class="modal-title fs-6">Remover conta</h1>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0">Remover <span id="acct-account-remove-name" class="fw-bold"></span>?</p>
+          <p class="small text-danger mb-0 mt-2">Os dados e login desta conta serão apagados.</p>
+        </div>
+        <div class="modal-footer py-2 border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Não</button>
+          <button type="button" class="btn btn-sm btn-danger" id="acct-delete-button">Remover</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Screen Share (compatibilidade WhatsApp) -->
+  <div class="modal fade" id="screenShareModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content" style="background:#202c33; color:#e9edef;">
+        <div class="modal-header py-2">
+          <h1 class="modal-title fs-5">Compartilhar Tela</h1>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="d-inline-flex justify-content-center w-100 mb-0">
+            <button type="button" class="btn btn-light border me-2 btn-share-type" data-bs-toggle="button" data-bs-target="#share-screens">Telas</button>
+            <button type="button" class="btn btn-light border ms-2 btn-share-type" data-bs-toggle="button" data-bs-target="#share-windows">Janelas</button>
+          </p>
+          <hr>
+          <div id="share-screens" class="collapse row mx-auto"></div>
+          <div id="share-windows" class="collapse row mx-auto">
+            <div class="row w-100">
+              <div class="col" id="share-windows-radios"></div>
+              <div class="col text-center">
+                <img id="share-windows-thumb" class="border" src="../assets/icon.png" style="max-width:300px;">
               </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" id="btn-share-cancel">Cancel</button>
-            <button type="button" class="btn btn-primary" id="btn-share-ok">Share</button>
-          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-share-cancel">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btn-share-ok">Compartilhar</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-    <script src="accounts.js"></script>
-  </body>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="accounts.js"></script>
+</body>
 </html>
-
