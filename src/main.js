@@ -371,8 +371,11 @@ class MultiChatApp {
 			width: this.bounds.width,
 			height: this.bounds.height,
 			icon: this.baseIcon,
-			backgroundColor: "#111b21",
-			show: false // mostra em ready-to-show — evita flash de janela vazia
+			backgroundColor: "#111b21", // pintura inicial escura — evita flash branco
+			// Mostra de imediato: esta janela não carrega página própria (as views
+			// são filhas), então ready-to-show nunca dispararia e a janela ficaria
+			// invisível. O backgroundColor cuida do flash inicial.
+			show: !process.argv.includes("--start-in-tray")
 		};
 		if (this.bounds.x != null) {
 			options.x = this.bounds.x;
@@ -383,11 +386,6 @@ class MultiChatApp {
 
 		if (this.bounds.x == null)
 			this.window.center();
-
-		this.window.once("ready-to-show", () => {
-			if (!process.argv.includes("--start-in-tray"))
-				this.window.show();
-		});
 
 		this.window.on("move", () => { this.scheduleStoreBounds(); });
 		this.window.on("resize", () => { this.scheduleStoreBounds(); });
