@@ -556,9 +556,10 @@ class MultiChatApp {
 	}
 
 	setCurrentView(id) {
-		const instance = this.instances[id];
-		if (!instance) {
-			// conta nunca carregada (lazy): cria agora
+		// Contas suspensas (ver suspendAccount) ficam com view = null: se a
+		// conta ativa for suspensa (ex.: aba Teams presa em background), ela
+		// nunca era recriada e o app ficava preso em tela branca ao voltar.
+		if (!instance || !instance.view) {
 			const view = this.ensureAccountView(id);
 			if (!view) return;
 		}
