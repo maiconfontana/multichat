@@ -501,7 +501,9 @@ class MultiChatApp {
 		view.webContents.on("render-process-gone", (event, details) => {
 			console.warn(`Account "${name} (${id})" renderer gone: ${details.reason}`);
 			const inst = this.instances[id];
-			if (!inst) return;
+			// O evento pode vir da view anterior depois que a conta já foi
+			// reativada. Não descarte a referência da view nova nesse caso.
+			if (!inst || inst.view !== view) return;
 			this.clearSuspendTimer(id);
 			try { this.window.contentView.removeChildView(view); } catch (e) {}
 			inst.view = null;
@@ -546,13 +548,17 @@ class MultiChatApp {
 		if (!inst || !inst.view || id === this.activeId) return;
 		console.log(`Suspending account "${inst.name}" (${id}) — freeing memory`);
 		this.clearSuspendTimer(id);
+
+		// Desvincula antes de fechar: render-process-gone pode chegar depois de
+		// uma reativação e deve ser reconhecido como evento da view antiga.
+		const view = inst.view;
+		inst.view = null;
 		try {
-			this.window.contentView.removeChildView(inst.view);
-			inst.view.webContents.close();
+			this.window.contentView.removeChildView(view);
+			view.webContents.close();
 		} catch (e) {
 			console.warn(`Suspend of "${id}" failed: ${e.message}`);
 		}
-		inst.view = null;
 	}
 
 	setCurrentView(id) {
