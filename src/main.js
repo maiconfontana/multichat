@@ -559,6 +559,7 @@ class MultiChatApp {
 		// Contas suspensas (ver suspendAccount) ficam com view = null: se a
 		// conta ativa for suspensa (ex.: aba Teams presa em background), ela
 		// nunca era recriada e o app ficava preso em tela branca ao voltar.
+		const instance = this.instances[id];
 		if (!instance || !instance.view) {
 			const view = this.ensureAccountView(id);
 			if (!view) return;
