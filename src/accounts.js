@@ -28,6 +28,45 @@ const TYPE_LABELS = {
 };
 
 let activeId = null;
+const DRAG_THRESHOLD = 6;
+let drag = null;
+let suppressClick = false;
+
+const accountIds = () => $$(".acct-item").map(el => el.dataset.id);
+
+const persistOrder = (fromIds) => {
+	const ids = accountIds();
+	if (ids.length < 2) return;
+	if (fromIds && fromIds.join("\0") === ids.join("\0")) return;
+	window.electron.reorderAccounts(ids);
+};
+
+const moveDraggedTo = (clientY) => {
+	const list = $("#sb-list");
+	const dragged = drag.el;
+	const others = $$(".acct-item").filter(el => el !== dragged);
+	for (const item of others) {
+		const rect = item.getBoundingClientRect();
+		if (clientY < rect.top + rect.height / 2) {
+			if (dragged.nextElementSibling !== item)
+				list.insertBefore(dragged, item);
+			return;
+		}
+	}
+	if (others.length)
+		list.appendChild(dragged);
+};
+
+const endDrag = () => {
+	if (!drag) return;
+	if (drag.dragging) {
+		suppressClick = true;
+		drag.el.classList.remove("is-dragging");
+		persistOrder(drag.fromIds);
+		setTimeout(() => { suppressClick = false; }, 50);
+	}
+	drag = null;
+};
 
 // ── Helpers (sem jQuery) ──
 const $  = (sel) => document.querySelector(sel);
@@ -35,7 +74,10 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const ACCOUNT_TEMPLATE = `
-	<div class="acct-avatar" style="background:__COLOR__">__ICON__<span class="acct-unread-badge" data-unread-badge="__ID__"></span></div>
+	<div class="acct-avatar-wrap">
+		<div class="acct-avatar" style="background:__COLOR__">__ICON__</div>
+		<span class="acct-unread-badge" data-unread-badge="__ID__"></span>
+	</div>
 	<div class="acct-meta">
 		<div class="acct-name" title="__NAME__">__NAME__</div>
 		<div class="acct-sub">
@@ -55,6 +97,10 @@ const ACCOUNT_TEMPLATE = `
 const fmtUnread = (n) => n > 99 ? '99+' : String(n);
 
 const renderList = (accounts) => {
+	if (drag) {
+		drag.el.classList.remove("is-dragging");
+		drag = null;
+	}
 	const list = $("#sb-list");
 	list.innerHTML = "";
 	$("#sb-empty").style.display = accounts.length === 0 ? "block" : "none";
@@ -91,8 +137,15 @@ const renderList = (accounts) => {
 		const notifBtn = el.querySelector(".acct-notif");
 		notifBtn.dataset.enabled = String(notifOn);
 
+		el.addEventListener("pointerdown", (e) => {
+			if (e.button !== 0) return;
+			if (e.target.closest(".acct-actions")) return;
+			drag = { el, startY: e.clientY, dragging: false };
+		});
+
 		el.addEventListener("click", (e) => {
 			if (e.target.closest(".acct-actions")) return;
+			if (suppressClick) { suppressClick = false; return; }
 			if (acct.id !== activeId) window.electron.gotoAccount(acct.id);
 		});
 
@@ -185,6 +238,22 @@ const init = async () => {
 };
 
 init();
+
+document.addEventListener("pointermove", (e) => {
+	if (!drag) return;
+	if (!drag.dragging && Math.abs(e.clientY - drag.startY) < DRAG_THRESHOLD) return;
+	if ($$(".acct-item").length < 2) return;
+	if (!drag.dragging) {
+		drag.dragging = true;
+		drag.fromIds = accountIds();
+		drag.el.classList.add("is-dragging");
+		try { drag.el.setPointerCapture(e.pointerId); } catch (_) {}
+	}
+	moveDraggedTo(e.clientY);
+});
+
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 
 // Botão de recolher/expandir sidebar
 $("#btn-toggle-sidebar").addEventListener("click", () => {

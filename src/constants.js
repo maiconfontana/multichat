@@ -97,6 +97,7 @@ Constants.event.getAccountsList         = "get-accounts-list";
 Constants.event.addAccount              = "add-account";
 Constants.event.updateAccount           = "update-account";
 Constants.event.deleteAccount           = "delete-account";
+Constants.event.reorderAccounts         = "reorder-accounts";
 Constants.event.gotoAccount             = "goto-account";
 Constants.event.reloadAccounts          = "reload-accounts";
 Constants.event.activeAccount           = "active-account";
