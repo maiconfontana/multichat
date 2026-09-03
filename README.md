@@ -1,5 +1,7 @@
 # MultiChat
 
+> ✳️ **Linha de teste na branch `teste-alteracao`** — alteração provisória para validar o fluxo de branch.
+
 Cliente desktop **multi-conta** para mensageiros web, construído em [Electron](https://www.electron.dev/).
 
 Use WhatsApp, Microsoft Teams, Telegram, Discord, Slack (ou qualquer URL personalizada) em contas separadas dentro de um único aplicativo, com sidebar, notificações do sistema e contador de mensagens não lidas.
