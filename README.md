@@ -11,12 +11,13 @@ Use WhatsApp, Microsoft Teams, Telegram, Discord, Slack (ou qualquer URL persona
 ## Funcionalidades
 
 - **Multi-conta**: várias contas do mesmo serviço ou de serviços diferentes, cada uma com seu próprio perfil de navegação (login isolado por conta)
-- **Leve por design**: apenas a conta em uso fica carregada — as demais são criadas sob demanda (lazy-load) e suspensas automaticamente após 10 minutos sem uso, devolvendo a memória ao sistema sem perder o login
+- **Equilíbrio entre conexão e memória**: contas são criadas sob demanda (lazy-load), continuam ativas em segundo plano e só são suspensas após 60 minutos sem uso, devolvendo memória sem perder o login; o prazo é configurável
 - **Sidebar recolhível**: alterne entre a lista expandida (280px) e o modo compacto apenas com ícones (72px) — o estado é persistido entre inicializações
 - **Notificações desktop** com título da conta e clique para focar a conversa; pode ser ligado/desligado por conta
 - **Contador de não lidas** por conta, refletido na sidebar e na bandeja (tray)
 - **Tray** (bandeja do sistema): minimizar/retornar para a bandeja em vez de fechar
 - **Compartilhamento de tela** no WhatsApp Web, com seletor próprio de telas/janelas
+- **Assistente contextual para WhatsApp**: lê somente as mensagens visíveis, gera um rascunho pela OpenAI e o insere no campo de edição para revisão e envio manual; não envia mensagens automaticamente
 - **Correção ortográfica** (en-US, pt-BR)
 - **Protocolo `whatsapp://`** registrado como aplicativo associado
 - **Funciona offline na interface**: os recursos da interface (Bootstrap e ícones) são carregados localmente, sem CDN
@@ -55,10 +56,12 @@ npm run start
 | `--disable-gpu` | Desabilita aceleração de hardware (útil em terminais/remotos) |
 | `--spell-lang=xx-XX` | Idioma adicional da correção ortográfica (ex.: `--spell-lang=es-ES`) |
 
+A variável de ambiente `MULTICHAT_SUSPEND_MINUTES` controla por quanto tempo uma conta inativa permanece conectada. O padrão é `60`; use `0` para nunca suspender ou um valor entre `0` e `1440` minutos. Quanto maior o prazo e o número de contas abertas, maior o uso de RAM.
+
 Exemplo:
 
 ```bash
-npm run start -- --start-in-tray --disable-gpu
+MULTICHAT_SUSPEND_MINUTES=120 npm run start -- --start-in-tray --disable-gpu
 ```
 
 ## Uso
@@ -69,7 +72,15 @@ npm run start -- --start-in-tray --disable-gpu
 4. **Recolher/expandir sidebar**: clique no botão de **painel** no topo da sidebar. No modo recolhido, o contador de não lidas aparece como badge sobre o avatar.
 5. **Editar/remover conta**: passe o mouse sobre o item e use os botões de lápis e pessoa-com-x. A remoção apaga o login daquela conta.
 6. **Notificações**: o botão de sino por conta liga/desliga as notificações do sistema.
-7. **Minimizar para a bandeja**: o botão fechar (X) esconde a janela; o ícone na bandeja mostra/oculta.
+7. **Assistente contextual**: numa conta WhatsApp, abra em **Exibir → Assistente contextual** (`Ctrl/Cmd+Shift+A`), configure um gateway compatível com OpenAI (Responses API ou Chat Completions), a chave e os perfis de agente. A chave é criptografada pelo `safeStorage` do Electron; testar uma chave digitada não a salva, e com o campo vazio o teste usa a chave já salva. Pesquisa web só é habilitada para gateway marcado como capaz e no modo Responses API. Confira o rascunho antes de inseri-lo; o envio permanece sempre manual. Teams e outros serviços ainda não são suportados.
+8. **Minimizar para a bandeja**: o botão fechar (X) esconde a janela; o ícone na bandeja mostra/oculta.
+
+## Testes e verificação
+
+```bash
+npm test      # testes unitários, inclusive adaptador WhatsApp com DOM fake
+npm run check # valida sintaxe dos processos principal, preloads e scripts
+```
 
 ## Build (distributíveis)
 
@@ -96,6 +107,12 @@ Os pacotes saem na pasta `dist/`.
 ├── src/
 │   ├── main.js               # processo principal (janela, sidebar, contas, tray, lazy-load)
 │   ├── constants.js          # nome do app, serviços suportados, eventos IPC
+│   ├── resource-policy.js    # política configurável de suspensão de contas
+│   ├── assistant.html/js     # painel lateral do assistente contextual
+│   ├── assistant-preload.js  # ponte IPC isolada do painel
+│   ├── assistant-core.js     # validação e montagem do contexto
+│   ├── openai-client.js      # cliente da Responses API
+│   ├── whatsapp-assistant-adapter.js # leitura/inserção via DOM do WhatsApp
 │   ├── preload.js            # ponte IPC da sidebar
 │   ├── whatsapp-preload.js   # injeção no WhatsApp Web (não lidas, notificações)
 │   ├── messenger-preload.js  # injeção genérica nos demais serviços

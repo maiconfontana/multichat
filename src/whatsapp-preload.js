@@ -1,5 +1,19 @@
  
 const { ipcRenderer } = require('electron');
+const AssistantAdapter = require('./whatsapp-assistant-adapter');
+
+ipcRenderer.on('assistant:account-request', (event, request) => {
+	if (!request || typeof request.id !== 'string') return;
+	try {
+		let result;
+		if (request.action === 'capture') result = AssistantAdapter.extractVisibleContext(document);
+		else if (request.action === 'insert') result = AssistantAdapter.insertDraft(document, String(request.payload?.conversationId || ''), String(request.payload?.draft || ''));
+		else throw new Error('Ação do assistente inválida.');
+		ipcRenderer.send('assistant:account-response', { id: request.id, result });
+	} catch (error) {
+		ipcRenderer.send('assistant:account-response', { id: request.id, error: String(error.message || error).slice(0, 300) });
+	}
+});
 
 class WhatsAppInstance
 {
@@ -12,6 +26,13 @@ class WhatsAppInstance
 		// Module Raid
 		this.mrid  = null;
 		this.mrobj = {};
+		this.disposed = false;
+		this.observeTimer = null;
+		this.retargetInterval = null;
+		this.idleCallback = null;
+		this.notificationClickHandler = (event, tag) => {
+			this.openChat(tag).catch(err => console.warn(`Could not open notification chat: ${err.message}`));
+		};
 
 		// Notification Wrapper
 		window.oldNotification = Notification;
@@ -24,9 +45,10 @@ class WhatsAppInstance
 			if (!unreadSchedule)
 			{
 				unreadSchedule = true;
-				requestIdleCallback(() => {
-					this.countUnread(); // run once per callback
+				this.idleCallback = requestIdleCallback(() => {
+					if (!this.disposed) this.countUnread(); // run once per callback
 					unreadSchedule = false;
+					this.idleCallback = null;
 				}, {timeout: 1000});
 			}
 
@@ -57,31 +79,26 @@ class WhatsAppInstance
 			return !!paneSide;
 		};
 
-		setTimeout(() => {
+		this.observeTimer = setTimeout(() => {
+			if (this.disposed) return;
 			console.log("Starting Mutation Observer...");
 			if (observeUnread()) return;
 			console.log("No #pane-side yet, watching document.body for now...");
-			const retarget = setInterval(() => {
-				if (observeUnread()) {
-					clearInterval(retarget);
-					console.log("Unread observer scoped to #pane-side.");
+			let attempts = 0;
+			this.retargetInterval = setInterval(() => {
+				attempts += 1;
+				if (this.disposed || observeUnread() || attempts >= 30) {
+					clearInterval(this.retargetInterval);
+					this.retargetInterval = null;
+					if (!this.disposed && attempts < 30)
+						console.log("Unread observer scoped to #pane-side.");
 				}
 			}, 2000);
 		}, 1000);
 
-		const moduleCheckInterval = setInterval(() => {
-			if (this.mrid != null && Object.keys(this.mrobj).length > 0) {
-				clearInterval(moduleCheckInterval);
-				return;
-			}
-			this.loadModuleRaid();
-		}, 3000);
-
-		// Events
-		ipcRenderer.on(Constants.event.fireNotificationClick, (event, tag) => {
-			//console.log("Received Notification Click from Main...", tag);
-			this.openChat(tag);
-		});
+		// O catálogo interno do WhatsApp é pesado. Carregá-lo somente no clique
+		// de uma notificação evita reter milhares de módulos em todas as contas.
+		ipcRenderer.on(Constants.event.fireNotificationClick, this.notificationClickHandler);
 	}
 
 	getId() {
@@ -158,13 +175,33 @@ class WhatsAppInstance
 		return results;
 	}
 
+	dispose() {
+		if (this.disposed) return;
+		this.disposed = true;
+		if (this.observeTimer) clearTimeout(this.observeTimer);
+		if (this.retargetInterval) clearInterval(this.retargetInterval);
+		if (this.idleCallback !== null && typeof cancelIdleCallback === 'function')
+			cancelIdleCallback(this.idleCallback);
+		this.observer.disconnect();
+		ipcRenderer.removeListener(Constants.event.fireNotificationClick, this.notificationClickHandler);
+		this.mrobj = {};
+		if (window.Notification === NotificationServer && window.oldNotification)
+			window.Notification = window.oldNotification;
+	}
+
 	async openChat (tag) {
 		console.log(`bv-openChat: ${tag}`);
 
-		let chatWid = this.findModule('createWid')[0].createWid(tag);
+		const createWid = this.findModule('createWid')[0];
+		const chatModule = this.findModule(m => m.default && m.default.Chat)[0];
+		const commandModule = this.findModule("Cmd")[0];
+		if (!createWid || !chatModule || !commandModule)
+			throw new Error('required WhatsApp modules are unavailable');
+
+		let chatWid = createWid.createWid(tag);
 		//console.log("openChat chatWid", chatWid);
 
-		let chat    = await this.findModule(m => m.default && m.default.Chat)[0].default.Chat.find(chatWid);
+		let chat    = await chatModule.default.Chat.find(chatWid);
 		//console.log("openChat chat", chat);
 
 		/* To Debug on Browser
@@ -174,7 +211,7 @@ class WhatsAppInstance
 		*/
 
 		//await this.findModule("Cmd")[0].Cmd.openChatBottom(chat);
-		await this.findModule("Cmd")[0].Cmd.openChatBottom({chat: chat});
+		await commandModule.Cmd.openChatBottom({chat: chat});
 	}
 
 	countUnread() {
@@ -288,6 +325,7 @@ ipcRenderer.on("init-whatsapp-instance", (event, data) => {
 	else
 	{
 		console.log(`Starting new WhatsAppInstance...`);
+		if (wa) wa.dispose();
 		wa = new WhatsAppInstance(data.id, data.name);
 		//window.wa = wa;
 	}

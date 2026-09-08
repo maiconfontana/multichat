@@ -5,10 +5,17 @@
   "description": "MultiChat — Multi-account messenger desktop app",
   "author": "Diego Aguirre (DagMoller) — local fork",
   "license": "MIT",
-  "keywords": ["multichat", "electron", "multi-account", "messenger"],
+  "keywords": [
+    "multichat",
+    "electron",
+    "multi-account",
+    "messenger"
+  ],
   "main": "./src/main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
+    "check": "node --check src/main.js && node --check src/whatsapp-preload.js && node --check src/whatsapp-assistant-adapter.js && node --check src/assistant-core.js && node --check src/assistant-settings.js && node --check src/openai-client.js && node --check src/assistant-preload.js && node --check src/assistant.js && node --check src/messenger-preload.js && node --check src/accounts.js && node --check src/preload.js && node --check src/resource-policy.js",
     "icons": "electron scripts/gen-icon.js",
     "clean": "rm -rf ./dist",
     "pack": "electron-builder --dir",
@@ -32,13 +39,26 @@
       "icon": "assets/icon.png",
       "category": "Network",
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "tar.xz", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.xz",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "win": {
       "icon": "assets/icon.ico",
-      "target": ["nsis", "zip"],
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "signExecutable": false
     },
     "nsis": {
@@ -50,14 +70,28 @@
       "icon": "assets/icon.png",
       "category": "public.app-category.social-networking",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "protocols": [
       {
         "name": "WhatsApp",
-        "schemes": ["whatsapp"]
+        "schemes": [
+          "whatsapp"
+        ]
       }
     ]
   },
@@ -65,7 +99,7 @@
     "electron-store": "^11.0.2"
   },
   "devDependencies": {
-    "electron": "^42.9.3",
+    "electron": "^42.11.1",
     "electron-builder": "^26.15.7"
   }
 }

@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld("electron", {
 	gotoAccount: (id) => ipcRenderer.send(Constants && Constants.event.gotoAccount, id),
 	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants && Constants.event.toggleNotifications, { id, enabled }),
 	toggleSidebar: () => ipcRenderer.send(Constants && Constants.event.toggleSidebar),
+	toggleAssistant: () => ipcRenderer.send(Constants && Constants.event.toggleAssistant),
 	onSidebarState: (cb) => ipcRenderer.on("sidebar-state", (e, collapsed) => cb(collapsed)),
 
 	reloadAccounts: (cb) => ipcRenderer.on("reload-accounts", cb),

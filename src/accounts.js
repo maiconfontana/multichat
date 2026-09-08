@@ -186,6 +186,11 @@ const init = async () => {
 
 init();
 
+// Assistente contextual — fica visível também no modo recolhido.
+$("#btn-assistant").addEventListener("click", () => {
+	window.electron.toggleAssistant();
+});
+
 // Botão de recolher/expandir sidebar
 $("#btn-toggle-sidebar").addEventListener("click", () => {
 	window.electron.toggleSidebar();

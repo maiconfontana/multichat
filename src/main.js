@@ -1,7 +1,11 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, safeStorage } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
+const { getSuspendAfterMs, formatSuspendPolicy } = require('./resource-policy');
+const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
+const { requestCompletion, testConnection } = require('./openai-client');
+const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
 
 // Constantes serializáveis para enviar aos renderers via IPC (sem funções,
 // que não atravessam a ponte — ver initResources / init*Instance).
@@ -22,10 +26,11 @@ for (const arg of process.argv) {
 }
 
 // Tempo de inatividade antes de suspender (descarregar da RAM) uma conta
-// que não está em exibição. O login fica salvo (sessão persistente) e a
-// conta recarrega automaticamente ao ser selecionada de novo.
-const SUSPEND_AFTER_MS = 10 * 60 * 1000;
+// que não está em exibição. O padrão equilibra atualizações em segundo plano
+// com uso de memória; MULTICHAT_SUSPEND_MINUTES=0 mantém todas conectadas.
+const SUSPEND_AFTER_MS = getSuspendAfterMs();
 const BOUNDS_DEBOUNCE_MS = 150;
+const MAX_ACTIVE_NOTIFICATIONS = 100;
 
 class MultiChatApp {
 	constructor() {
@@ -43,6 +48,10 @@ class MultiChatApp {
 			this.store.set("sidebarCollapsed", true);
 		}
 		this._boundsTimer = null;
+		this.assistantView = null;
+		this.assistantVisible = false;
+		this.assistantPending = new Map();
+		this.assistantWidth = 400;
 
 		this.bounds = this.store.get("bounds");
 		if (this.bounds == undefined) {
@@ -98,6 +107,7 @@ class MultiChatApp {
 					{ role: "zoomIn",  label: "Ampliar" },
 					{ role: "zoomOut", label: "Reduzir" },
 					{ type: "separator" },
+					{ label: "Assistente contextual", accelerator: "CmdOrCtrl+Shift+A", click: () => { this.toggleAssistant(); } },
 					{ role: "togglefullscreen", label: "Tela cheia" },
 					{ type: "separator" },
 					{ label: this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral", click: () => { this.toggleSidebar(); } }
@@ -131,6 +141,7 @@ class MultiChatApp {
 		if (langs.length > 0)
 			this.spellLangs = langs;
 		console.log(`MultiChat: Spell Check: ${this.spellLangs}`);
+		console.log(`MultiChat: Suspensão de contas inativas: ${formatSuspendPolicy(SUSPEND_AFTER_MS)}`);
 
 		this.registerEvents();
 		this.createWindow();
@@ -190,6 +201,8 @@ class MultiChatApp {
 				this.activeNotifications = this.activeNotifications.filter(_n => _n !== n);
 			});
 			this.activeNotifications.push(n);
+			if (this.activeNotifications.length > MAX_ACTIVE_NOTIFICATIONS)
+				this.activeNotifications.splice(0, this.activeNotifications.length - MAX_ACTIVE_NOTIFICATIONS);
 			n.show();
 		});
 
@@ -304,8 +317,14 @@ class MultiChatApp {
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 		});
 
-		ipcMain.on(Constants.event.toggleSidebar, () => {
+		ipcMain.on(Constants.event.toggleSidebar, event => {
+			if (event.sender !== this.sidebarView?.webContents) return;
 			this.toggleSidebar();
+		});
+
+		ipcMain.on(Constants.event.toggleAssistant, event => {
+			if (event.sender !== this.sidebarView?.webContents) return;
+			this.toggleAssistant();
 		});
 
 		// ── Compartilhamento de tela (modal em janela própria) ──
@@ -336,6 +355,8 @@ class MultiChatApp {
 		});
 
 		// ── Limpar ServiceWorkers/cache e recarregar (anti "atualize o Chrome") ──
+		this.registerAssistantEvents();
+
 		ipcMain.on(Constants.event.clearWorkersAndReload, (event, id) => {
 			const inst = this.instances[id];
 			if (!inst || !inst.view) return;
@@ -349,6 +370,174 @@ class MultiChatApp {
 				if (inst.view) inst.view.webContents.reload();
 			});
 		});
+	}
+
+	isAssistantSender(event) {
+		return !!(this.assistantView && !this.assistantView.webContents.isDestroyed() && event.sender === this.assistantView.webContents);
+	}
+
+	getAssistantSettings() {
+		const gateway = normalizeGateway(this.store.get('assistant.gateway') || { ...DEFAULT_GATEWAY, model: this.store.get('assistant.model') });
+		const profiles = this.store.get('assistant.profiles') || DEFAULT_PROFILES.map(item => ({ ...item }));
+		const validProfiles = normalizeProfiles(profiles);
+		const defaultProfileId = validProfiles.some(item => item.id === this.store.get('assistant.defaultProfileId')) ? this.store.get('assistant.defaultProfileId') : validProfiles[0].id;
+		return { gateway, profiles: validProfiles, defaultProfileId, hasApiKey: !!this.store.get('assistant.apiKey') };
+	}
+
+	getProfileSelection(accountId, conversationId) {
+		const settings = this.getAssistantSettings();
+		const selected = (this.store.get('assistant.selections') || {})[selectionKey(accountId, conversationId)];
+		return settings.profiles.some(item => item.id === selected) ? selected : settings.defaultProfileId;
+	}
+
+	saveProfileSelection(accountId, conversationId, profileId) {
+		const settings = this.getAssistantSettings();
+		if (!settings.profiles.some(item => item.id === profileId)) throw new Error('Perfil inválido.');
+		const selections = this.store.get('assistant.selections') || {};
+		selections[selectionKey(accountId, conversationId)] = profileId;
+		this.store.set('assistant.selections', selections);
+		return profileId;
+	}
+
+	getAssistantApiKey() {
+		const encoded = this.store.get('assistant.apiKey');
+		if (!encoded) throw new Error('Configure a chave da OpenAI.');
+		if (!safeStorage.isEncryptionAvailable()) throw new Error('O armazenamento seguro não está disponível neste sistema.');
+		try { return safeStorage.decryptString(Buffer.from(encoded, 'base64')); }
+		catch (_) { throw new Error('Não foi possível ler a chave salva. Configure-a novamente.'); }
+	}
+
+	requestActiveWhatsApp(action, payload = {}) {
+		const inst = this.activeId && this.instances[this.activeId];
+		if (!inst || inst.type !== 'whatsapp' || !inst.view || inst.view.webContents.isDestroyed())
+			return Promise.reject(new Error('O assistente está disponível somente em uma conta WhatsApp ativa.'));
+		const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+		const sender = inst.view.webContents;
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.assistantPending.delete(id);
+				reject(new Error('O WhatsApp não respondeu a tempo. Tente novamente.'));
+			}, 10000);
+			this.assistantPending.set(id, { sender, resolve, reject, timer });
+			try { sender.send('assistant:account-request', { id, action, payload }); }
+			catch (error) { clearTimeout(timer); this.assistantPending.delete(id); reject(error); }
+		});
+	}
+
+	registerAssistantEvents() {
+		ipcMain.on('assistant:account-response', (event, response) => {
+			if (!response || typeof response.id !== 'string') return;
+			const pending = this.assistantPending.get(response.id);
+			if (!pending || event.sender !== pending.sender) return;
+			clearTimeout(pending.timer);
+			this.assistantPending.delete(response.id);
+			if (response.error) pending.reject(new Error(String(response.error).slice(0, 300)));
+			else pending.resolve(response.result);
+		});
+		ipcMain.handle('assistant:get-settings', event => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			return this.getAssistantSettings();
+		});
+		ipcMain.handle('assistant:save-settings', (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			const gateway = normalizeGateway(raw.gateway);
+			this.store.set('assistant.gateway', gateway);
+			const apiKey = String(raw.apiKey || '').trim();
+			if (apiKey) {
+				if (!safeStorage.isEncryptionAvailable()) throw new Error('O armazenamento seguro não está disponível neste sistema.');
+				this.store.set('assistant.apiKey', safeStorage.encryptString(apiKey).toString('base64'));
+			}
+			return this.getAssistantSettings();
+		});
+		ipcMain.handle('assistant:test-connection', async (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			const gateway = normalizeGateway(raw.gateway);
+			return testConnection({ apiKey: resolveApiKey(raw.apiKey, () => this.getAssistantApiKey()), gateway });
+		});
+		ipcMain.handle('assistant:save-profiles', (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			const profiles = normalizeProfiles(raw.profiles);
+			if (!profiles.some(item => item.id === raw.defaultProfileId)) throw new Error('Perfil padrão inválido.');
+			this.store.set('assistant.profiles', profiles); this.store.set('assistant.defaultProfileId', raw.defaultProfileId);
+			const validIds = new Set(profiles.map(item => item.id));
+			const selections = this.store.get('assistant.selections') || {};
+			for (const key of Object.keys(selections)) if (!validIds.has(selections[key])) delete selections[key];
+			this.store.set('assistant.selections', selections);
+			return this.getAssistantSettings();
+		});
+		ipcMain.handle('assistant:get-selection', (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			return this.getProfileSelection(raw.accountId, raw.conversationId);
+		});
+		ipcMain.handle('assistant:set-selection', (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			return this.saveProfileSelection(raw.accountId, raw.conversationId, String(raw.profileId || ''));
+		});
+		ipcMain.handle('assistant:capture', async event => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			return { ...normalizeContext(await this.requestActiveWhatsApp('capture')), accountId: this.activeId };
+		});
+		ipcMain.handle('assistant:generate', async (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			const context = normalizeContext(raw.context);
+			if (!this.activeId || String(raw.context?.accountId || '') !== String(this.activeId)) throw new Error('A conta ativa mudou. Capture a conversa novamente.');
+			const current = normalizeContext(await this.requestActiveWhatsApp('capture'));
+			if (current.conversationId !== context.conversationId) throw new Error('A conversa ativa mudou. Capture a conversa novamente.');
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), 45000);
+			try {
+				const settings = this.getAssistantSettings();
+				const profileId = String(raw.profileId || this.getProfileSelection(this.activeId, context.conversationId));
+				const profile = settings.profiles.find(item => item.id === profileId);
+				if (!profile) throw new Error('Perfil de agente inválido.');
+				this.saveProfileSelection(this.activeId, context.conversationId, profile.id);
+				const request = buildRequest(context, raw.instruction, profile.systemPrompt);
+				return await requestCompletion({ apiKey: this.getAssistantApiKey(), gateway: settings.gateway, ...request, webSearch: raw.webSearch === true, signal: controller.signal });
+			} catch (error) {
+				if (error && error.name === 'AbortError') throw new Error('A OpenAI não respondeu em 45 segundos.');
+				throw error;
+			} finally { clearTimeout(timer); }
+		});
+		ipcMain.handle('assistant:insert-draft', async (event, raw = {}) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			return this.requestActiveWhatsApp('insert', { conversationId: String(raw.conversationId || '').slice(0, 500), draft: normalizeDraft(raw.draft) });
+		});
+		ipcMain.handle('assistant:open-external', async (event, value) => {
+			if (!this.isAssistantSender(event)) throw new Error('Origem IPC inválida.');
+			let url; try { url = new URL(String(value)); } catch (_) { throw new Error('URL inválida.'); }
+			if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Somente links HTTP(S) são permitidos.');
+			await shell.openExternal(url.href);
+			return true;
+		});
+		ipcMain.on('assistant:close', event => { if (this.isAssistantSender(event)) this.toggleAssistant(false); });
+	}
+
+	createAssistantView() {
+		if (this.assistantView && !this.assistantView.webContents.isDestroyed()) return;
+		this.assistantView = new WebContentsView({ webPreferences: { preload: path.join(__dirname, 'assistant-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+		this.assistantView.setBackgroundColor('#111b21');
+		this.assistantView.webContents.loadFile(path.join(__dirname, 'assistant.html'));
+		this.assistantView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+		this.assistantView.setVisible(false);
+		this.window.contentView.addChildView(this.assistantView);
+	}
+
+	toggleAssistant(force) {
+		const visible = typeof force === 'boolean' ? force : !this.assistantVisible;
+		if (visible) this.createAssistantView();
+		this.assistantVisible = visible;
+		if (this.assistantView && !this.assistantView.webContents.isDestroyed()) this.assistantView.setVisible(visible);
+		for (const id in this.instances) this.layoutAccountView(id);
+		this.layoutAssistantView();
+		if (visible) this.assistantView.webContents.focus();
+		else if (this.activeId && this.instances[this.activeId]?.view) this.instances[this.activeId].view.webContents.focus();
+	}
+
+	layoutAssistantView() {
+		if (!this.assistantView || this.assistantView.webContents.isDestroyed()) return;
+		const b = this.window.getContentBounds();
+		const width = Math.min(this.assistantWidth, Math.max(280, b.width - this.getSidebarWidth() - 240));
+		this.assistantView.setBounds({ x: b.width - width, y: 0, width, height: b.height });
 	}
 
 	toggleSidebar() {
@@ -456,6 +645,8 @@ class MultiChatApp {
 				partition: `persist:${id}`,
 				preload: path.join(__dirname, preloadFile),
 				spellcheck: true,
+				// Mensageiros dependem de WebSocket e timers mesmo quando ocultos.
+				backgroundThrottling: false,
 				contextIsolation: false
 			}
 		});
@@ -485,7 +676,11 @@ class MultiChatApp {
 				if (host === baseHost || host.endsWith("." + baseHost))
 					return { action: "allow" };
 			} catch (e) {}
-			shell.openExternal(details.url);
+			try {
+				const external = new URL(details.url);
+				if (external.protocol === 'http:' || external.protocol === 'https:')
+					shell.openExternal(external.href);
+			} catch (e) {}
 			return { action: 'deny' };
 		});
 
@@ -515,6 +710,12 @@ class MultiChatApp {
 		view.setVisible(false);
 		this.window.contentView.addChildView(view);
 		this.layoutAccountView(id);
+		// Contas lazy podem ser criadas depois do painel; mantenha o assistente no topo.
+		if (this.assistantVisible && this.assistantView && !this.assistantView.webContents.isDestroyed()) {
+			this.window.contentView.removeChildView(this.assistantView);
+			this.window.contentView.addChildView(this.assistantView);
+			this.layoutAssistantView();
+		}
 		return view;
 	}
 
@@ -536,7 +737,7 @@ class MultiChatApp {
 
 	scheduleSuspend(id) {
 		const inst = this.instances[id];
-		if (!inst || !inst.view || id === this.activeId) return;
+		if (SUSPEND_AFTER_MS === 0 || !inst || !inst.view || id === this.activeId) return;
 		this.clearSuspendTimer(id);
 		inst.suspendTimer = setTimeout(() => {
 			this.suspendAccount(id);
@@ -615,7 +816,8 @@ class MultiChatApp {
 		const view = inst.view;
 		const b = this.window.getContentBounds();
 		const sbw = this.getSidebarWidth();
-		view.setBounds({ x: sbw, y: 0, width: b.width - sbw, height: b.height });
+		const assistantWidth = this.assistantVisible ? Math.min(this.assistantWidth, Math.max(280, b.width - sbw - 240)) : 0;
+		view.setBounds({ x: sbw, y: 0, width: Math.max(1, b.width - sbw - assistantWidth), height: b.height });
 	}
 
 	updateSidebarBounds() {
@@ -640,6 +842,7 @@ class MultiChatApp {
 		this.updateSidebarBounds();
 		for (const id in this.instances)
 			this.layoutAccountView(id);
+		this.layoutAssistantView();
 	}
 
 	updateTrayBadgeCounter() {
@@ -719,6 +922,17 @@ class MultiChatApp {
 		this.sharePicker = null;
 	}
 
+	clearSessionCaches() {
+		const sessions = new Set();
+		for (const id in this.instances) {
+			const view = this.instances[id].view;
+			if (view && !view.webContents.isDestroyed())
+				sessions.add(view.webContents.session);
+			this.clearSuspendTimer(id);
+		}
+		return Promise.allSettled([...sessions].map(ses => ses.clearCache()));
+	}
+
 	showHide(hide = true) {
 		if (!this.window.isFocused()) {
 			if (this.window.isVisible())
@@ -757,6 +971,9 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
 	ws.isQuit = true;
+	// A limpeza é best-effort: remove cache HTTP obsoleto sem apagar cookies,
+	// IndexedDB ou demais dados responsáveis por manter as contas logadas.
+	ws.clearSessionCaches().catch(err => console.warn(`MultiChat: Falha ao limpar cache: ${err.message}`));
 	if (ws.sharePicker && !ws.sharePicker.isDestroyed())
 		ws.sharePicker.destroy();
 });

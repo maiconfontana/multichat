@@ -103,6 +103,7 @@ Constants.event.activeAccount           = "active-account";
 Constants.event.updateUnread            = "update-unread";
 Constants.event.toggleNotifications     = "toggle-notifications";
 Constants.event.toggleSidebar           = "toggle-sidebar";
+Constants.event.toggleAssistant         = "toggle-assistant";
 Constants.event.sidebarState            = "sidebar-state";
 
 Constants.event.getShareSources   = "get-share-sources";
