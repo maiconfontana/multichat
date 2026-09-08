@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("electron", {
 	addAccount: (data) => ipcRenderer.send(Constants && Constants.event.addAccount, data),
 	updateAccount: (data) => ipcRenderer.send(Constants && Constants.event.updateAccount, data),
 	deleteAccount: (id) => ipcRenderer.send(Constants && Constants.event.deleteAccount, id),
+	reorderAccounts: (ids) => ipcRenderer.send(Constants && Constants.event.reorderAccounts, ids),
 	gotoAccount: (id) => ipcRenderer.send(Constants && Constants.event.gotoAccount, id),
 	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants && Constants.event.toggleNotifications, { id, enabled }),
 	toggleSidebar: () => ipcRenderer.send(Constants && Constants.event.toggleSidebar),

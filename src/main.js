@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, webContents } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
@@ -89,6 +89,26 @@ class MultiChatApp {
 					{ label: "Ferramentas de desenvolvedor", accelerator: "CmdOrCtrl+Shift+I", click: () => { this.openDevTools(); } },
 					{ type: "separator" },
 					quitItem
+				]
+			},
+			// macOS roteia Cmd+C/V/X/A/Z pelo menu da aplicação. Sem estes
+			// itens, o Menu.setApplicationMenu abaixo substitui o menu padrão
+			// do Electron e os atalhos morrem em todas as conversas.
+			// Click explícito (em vez de só role) porque o BrowserWindow não
+			// carrega página: o role nativo pode colar no webContents vazio
+			// da janela em vez da WebContentsView focada.
+			{
+				label: "Editar",
+				submenu: [
+					{ label: "Desfazer", accelerator: "CmdOrCtrl+Z", click: () => { this.runEditCommand("undo"); } },
+					{ label: "Refazer", accelerator: "Shift+CmdOrCtrl+Z", click: () => { this.runEditCommand("redo"); } },
+					{ type: "separator" },
+					{ label: "Recortar", accelerator: "CmdOrCtrl+X", click: () => { this.runEditCommand("cut"); } },
+					{ label: "Copiar", accelerator: "CmdOrCtrl+C", click: () => { this.runEditCommand("copy"); } },
+					{ label: "Colar", accelerator: "CmdOrCtrl+V", click: () => { this.runEditCommand("paste"); } },
+					{ label: "Colar e combinar estilo", accelerator: "Shift+CmdOrCtrl+V", click: () => { this.runEditCommand("pasteAndMatchStyle"); } },
+					{ label: "Excluir", click: () => { this.runEditCommand("delete"); } },
+					{ label: "Selecionar tudo", accelerator: "CmdOrCtrl+A", click: () => { this.runEditCommand("selectAll"); } }
 				]
 			},
 			{
@@ -291,6 +311,20 @@ class MultiChatApp {
 			this.setCurrentView(id);
 		});
 
+		ipcMain.on(Constants.event.reorderAccounts, (event, ids) => {
+			if (!Array.isArray(ids) || ids.length !== this.accounts.length) return;
+			const byId = new Map(this.accounts.map(a => [a.id, a]));
+			const next = [];
+			const seen = new Set();
+			for (const id of ids) {
+				if (!byId.has(id) || seen.has(id)) return;
+				seen.add(id);
+				next.push(byId.get(id));
+			}
+			this.accounts = next;
+			this.store.set("accounts", this.accounts);
+		});
+
 		ipcMain.on(Constants.event.toggleNotifications, (event, data) => {
 			const account = this.accounts.find(a => a.id === data.id);
 			if (!account) return;
@@ -368,6 +402,24 @@ class MultiChatApp {
 			}
 		}
 		if (this.menu) Menu.setApplicationMenu(Menu.buildFromTemplate(this.menuTemplate));
+	}
+
+	getEditTarget() {
+		const focused = webContents.getFocusedWebContents();
+		if (focused && !focused.isDestroyed() && this.window && focused !== this.window.webContents)
+			return focused;
+		const inst = this.activeId && this.instances[this.activeId];
+		if (inst && inst.view && inst.view.webContents && !inst.view.webContents.isDestroyed())
+			return inst.view.webContents;
+		if (this.sidebarView && this.sidebarView.webContents && !this.sidebarView.webContents.isDestroyed())
+			return this.sidebarView.webContents;
+		return (focused && !focused.isDestroyed()) ? focused : null;
+	}
+
+	runEditCommand(method) {
+		const target = this.getEditTarget();
+		if (target && typeof target[method] === "function")
+			target[method]();
 	}
 
 	createWindow() {
@@ -559,6 +611,7 @@ class MultiChatApp {
 		// Contas suspensas (ver suspendAccount) ficam com view = null: se a
 		// conta ativa for suspensa (ex.: aba Teams presa em background), ela
 		// nunca era recriada e o app ficava preso em tela branca ao voltar.
+		const instance = this.instances[id];
 		if (!instance || !instance.view) {
 			const view = this.ensureAccountView(id);
 			if (!view) return;
