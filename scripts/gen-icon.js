@@ -1,6 +1,8 @@
 // Gera derivados do ícone do app a partir do PNG mestre (512px):
 //   icon-256.png, icon-128.png, icon-32.png e icon.ico (container ICO
 //   com PNGs embutidos — formato suportado pelo Windows Vista+).
+// O ícone de menu bar do macOS (trayTemplate.png) é gerado à parte:
+//   python3 scripts/gen-tray-icon.py
 // Segurança: se um resize resultar em buffer vazio, o arquivo NÃO é
 // sobrescrito (evita destruir ícones bons em ambientes onde o
 // rasterizador falha).
