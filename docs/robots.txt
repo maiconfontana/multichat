@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://maiconfontana.github.io/multichat/sitemap.xml

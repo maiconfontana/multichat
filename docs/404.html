@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0f10">
+<meta name="robots" content="noindex, follow">
+<title>Página não encontrada — MultiChat</title>
+<meta name="description" content="Esta URL não existe no site do MultiChat. Os downloads estão na página de releases do GitHub.">
+<link rel="icon" href="/multichat/icon.png">
+<style>
+	/* Página de erro: só o essencial da marca, sem importar o CSS do index.html
+	   (manter duas cópias do tema inteiro sincronizadas não vale o pedido extra). */
+	:root {
+		--ink: #0b0f10; --line: #243133; --text: #dfe6e3;
+		--muted: #8ba09a; --signal: #00b98f;
+		--font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+		--font-display: "Archivo", var(--font-body);
+		--font-util: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	}
+	body {
+		margin: 0; min-height: 100vh; background: var(--ink); color: var(--text);
+		font: 16px/1.6 var(--font-body); display: flex; align-items: center;
+	}
+	.wrap { max-width: 560px; margin: 0 auto; padding: 48px 24px; }
+	img { width: 40px; height: 40px; border-radius: 10px; }
+	p.kicker { font: 500 .78rem/1 var(--font-util); color: var(--muted); letter-spacing: .04em; margin: 22px 0 10px; }
+	h1 { font-family: var(--font-display); font-size: 1.7rem; letter-spacing: -.02em; margin: 0 0 12px; color: #f0f3ef; }
+	p { color: var(--muted); margin: 0 0 22px; }
+	code { font-family: var(--font-util); font-size: .88em; background: rgba(0,0,0,.4); border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; color: var(--text); }
+	ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+	li { border-bottom: 1px solid var(--line); }
+	a { display: flex; align-items: center; gap: 12px; min-height: 56px; color: var(--text); text-decoration: none; font-weight: 500; }
+	a:hover { color: var(--signal); }
+	a::before { content: "→"; font-family: var(--font-util); color: var(--signal); }
+</style>
+</head>
+<body>
+	<div class="wrap">
+		<img src="/multichat/icon.png" alt="" width="40" height="40">
+		<p class="kicker">404 · caminho não existe</p>
+		<h1>Essa página não está aqui.</h1>
+		<p>Provavelmente o endereço mudou ou foi digitado pela metade. O que você procura costuma estar num destes três lugares — se digitou <code>/multichat/download/…</code>, os arquivos estão nas releases.</p>
+		<ul>
+			<li><a href="/multichat/">Página do projeto e downloads</a></li>
+			<li><a href="https://github.com/maiconfontana/multichat/releases">Releases no GitHub</a></li>
+			<li><a href="https://github.com/maiconfontana/multichat">Código-fonte e issues</a></li>
+		</ul>
+	</div>
+</body>
+</html>
