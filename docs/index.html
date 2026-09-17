@@ -10,292 +10,505 @@
 <meta property="og:type" content="website">
 <meta property="og:image" content="icon.png">
 <link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Archivo+Expanded:wght@700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 	:root {
-		--bg: #0b141a;
-		--panel: #111b21;
-		--panel-2: #1a252b;
-		--line: #22343c;
-		--text: #e9edef;
-		--muted: #8696a0;
-		--accent: #25d366;
-		--accent-dark: #128c7e;
-		--radius: 14px;
+		--ink: #0c1113;
+		--ink-2: #11181a;
+		--panel: #151d20;
+		--panel-2: #1a2427;
+		--line: #24312f;
+		--line-soft: #1c2726;
+		--text: #dde4e2;
+		--cream: #eef2ee;
+		--muted: #7f938c;
+		--signal: #4ade80;
+		--signal-dim: rgba(74, 222, 128, .12);
+		--violet: #a78bfa;
+		--amber: #e7b04c;
+		--font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+		--font-display: "Archivo Expanded", "Archivo", var(--font-body);
+		--font-util: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	}
 	* { box-sizing: border-box; }
 	html { scroll-behavior: smooth; }
 	body {
 		margin: 0;
-		background: var(--bg);
+		background: var(--ink);
 		color: var(--text);
-		font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+		font: 16px/1.65 var(--font-body);
 		-webkit-font-smoothing: antialiased;
 	}
-	a { color: var(--accent); }
-	.wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+	::selection { background: var(--signal); color: var(--ink); }
+	a { color: var(--signal); text-decoration: none; }
+	a:hover { text-decoration: underline; }
+	.wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
 
-	header.hero {
-		padding: 64px 0 48px;
+	/* ── eyebrows e títulos ─────────────────────────────── */
+	.eyebrow {
+		font: 500 .74rem/1 var(--font-util);
+		text-transform: uppercase;
+		letter-spacing: .18em;
+		color: var(--muted);
+		display: flex; align-items: center; gap: 10px;
+		margin: 0 0 18px;
+	}
+	.eyebrow::before {
+		content: ""; width: 22px; height: 1px; background: var(--signal); flex: none;
+	}
+	h1, h2, h3 { font-family: var(--font-display); text-transform: uppercase; }
+	h2 { font-size: clamp(1.35rem, 3vw, 1.8rem); font-weight: 800; letter-spacing: .01em; margin: 0 0 10px; color: var(--cream); }
+	.section-sub { color: var(--muted); margin: 0 0 36px; max-width: 62ch; }
+
+	/* ── topo ───────────────────────────────────────────── */
+	.topbar {
+		display: flex; align-items: center; justify-content: space-between;
+		padding: 18px 0; border-bottom: 1px solid var(--line-soft);
+	}
+	.brand { display: flex; align-items: center; gap: 10px; color: var(--cream); font-family: var(--font-display); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; font-size: .95rem; }
+	.brand:hover { text-decoration: none; }
+	.brand img { width: 30px; height: 30px; border-radius: 8px; }
+	.topbar nav { display: flex; gap: 22px; font-size: .9rem; }
+	.topbar nav a { color: var(--muted); }
+	.topbar nav a:hover { color: var(--cream); text-decoration: none; }
+
+	/* ── hero ───────────────────────────────────────────── */
+	.hero {
+		padding: 84px 0 92px;
 		background:
-			radial-gradient(900px 400px at 50% -120px, rgba(37, 211, 102, .18), transparent 70%),
-			var(--panel);
-		border-bottom: 1px solid var(--line);
-		text-align: center;
+			radial-gradient(720px 420px at 82% -10%, rgba(167, 139, 250, .07), transparent 65%),
+			radial-gradient(820px 460px at 12% -16%, rgba(74, 222, 128, .09), transparent 65%),
+			linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 44px,
+			linear-gradient(90deg, var(--line-soft) 1px, transparent 1px) 0 0 / 44px 100%,
+			linear-gradient(var(--ink-2), var(--ink));
 	}
-	.hero img.logo { width: 104px; height: 104px; border-radius: 24px; }
-	h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 20px 0 12px; letter-spacing: -.02em; }
-	.hero p.tagline { color: var(--muted); font-size: 1.15rem; max-width: 640px; margin: 0 auto 28px; }
-	.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+	.hero .wrap {
+		display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+		gap: 56px; align-items: center;
+	}
+	h1 {
+		font-size: clamp(2.1rem, 4.6vw, 3.3rem); font-weight: 900;
+		line-height: 1.06; letter-spacing: .005em;
+		margin: 0 0 22px; color: var(--cream);
+	}
+	h1 .thin { color: var(--muted); font-weight: 700; }
+	.hero .tagline { color: var(--muted); font-size: 1.06rem; max-width: 52ch; margin: 0 0 30px; }
+	.hero .tagline strong { color: var(--text); font-weight: 600; }
+	.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 26px; }
 	.btn {
-		display: inline-flex; align-items: center; gap: 8px;
-		padding: 13px 22px; border-radius: 999px; font-weight: 600;
-		text-decoration: none; border: 1px solid transparent; transition: transform .12s ease, background .12s ease;
+		display: inline-flex; align-items: center; gap: 9px;
+		padding: 13px 24px; border-radius: 4px; font-weight: 600; font-size: .95rem;
+		text-decoration: none; border: 1px solid transparent;
+		transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
 	}
-	.btn:hover { transform: translateY(-1px); }
-	.btn-primary { background: var(--accent); color: #06251a; }
-	.btn-primary:hover { background: #1fbe5b; }
-	.btn-ghost { border-color: var(--line); color: var(--text); background: rgba(255,255,255,.02); }
-	.hero .meta { margin-top: 20px; color: var(--muted); font-size: .9rem; }
-	.hero .meta span { white-space: nowrap; }
-	.hero .meta span + span::before { content: " · "; }
+	.btn:hover { text-decoration: none; transform: translateY(-1px); }
+	.btn-primary { background: var(--signal); color: #07130c; box-shadow: 0 0 0 0 rgba(74,222,128,.35); }
+	.btn-primary:hover { box-shadow: 0 6px 22px -6px rgba(74,222,128,.45); }
+	.btn-ghost { border-color: var(--line); color: var(--text); }
+	.btn-ghost:hover { border-color: var(--muted); }
+	.hero-meta {
+		display: flex; flex-wrap: wrap; gap: 8px 18px;
+		font: 400 .8rem/1.4 var(--font-util); color: var(--muted);
+	}
+	.hero-meta .dot { color: var(--signal); }
+	#version-line { color: var(--text); }
 
-	section { padding: 56px 0; }
-	section + section { border-top: 1px solid var(--line); }
-	h2 { font-size: 1.55rem; margin: 0 0 8px; letter-spacing: -.01em; }
-	.section-sub { color: var(--muted); margin: 0 0 28px; }
-
-	.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-	.card {
+	/* ── assinatura: pilha de contas ────────────────────── */
+	.accounts {
+		position: relative; height: 380px; min-width: 0;
+	}
+	.acc {
+		position: absolute; left: 50%; top: 50%;
+		width: min(300px, 86%);
+		margin: -118px -150px 0 0;
 		background: var(--panel); border: 1px solid var(--line);
-		border-radius: var(--radius); padding: 22px;
+		border-radius: 6px; padding: 14px 16px;
+		transition: transform .45s cubic-bezier(.22, 1, .36, 1), border-color .3s ease;
+		box-shadow: 0 18px 44px -20px rgba(0,0,0,.75);
 	}
-	.card h3 { margin: 0 0 8px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
-	.card p { margin: 0; color: var(--muted); font-size: .95rem; }
-	.card .os-icon { width: 22px; height: 22px; flex: none; }
+	.acc .acc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+	.acc .avatar { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+	.acc .acc-name { font-size: .84rem; font-weight: 600; color: var(--text); }
+	.acc .acc-app { margin-left: auto; font: 500 .62rem/1 var(--font-util); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 4px 6px; }
+	.acc .bubble { background: var(--panel-2); border-radius: 4px 10px 10px 10px; padding: 9px 11px; font-size: .8rem; color: var(--muted); margin-bottom: 8px; }
+	.acc .bubble.out { background: rgba(74, 222, 128, .13); color: var(--text); border-radius: 10px 4px 10px 10px; margin-left: 26px; }
+	.acc .unread { display: inline-block; font: 500 .66rem/1 var(--font-util); background: var(--signal); color: #07130c; border-radius: 999px; padding: 4px 7px; }
+	.acc.a1 { transform: translate(-50%, -50%) rotate(-7deg) translateY(30px) scale(.94); z-index: 1; }
+	.acc.a2 { transform: translate(-50%, -50%) rotate(4.5deg) translateY(12px) scale(.97); z-index: 2; }
+	.acc.a3 { transform: translate(-50%, -50%) rotate(-1.2deg); z-index: 3; }
+	.accounts:hover .acc.a1 { transform: translate(-50%, -50%) rotate(-13deg) translate(-96px, 64px) scale(.94); border-color: rgba(167,139,250,.45); }
+	.accounts:hover .acc.a2 { transform: translate(-50%, -50%) rotate(8deg) translate(84px, 34px) scale(.96); border-color: rgba(167,139,250,.45); }
+	.accounts:hover .acc.a3 { transform: translate(-50%, -50%) rotate(0deg) translateY(-40px); border-color: rgba(74,222,128,.55); }
+	.acc .tag { position: absolute; bottom: -9px; right: 14px; font: 500 .6rem/1 var(--font-util); letter-spacing: .12em; text-transform: uppercase; background: var(--ink); border: 1px solid var(--line); color: var(--muted); padding: 4px 8px; border-radius: 3px; }
+	@media (prefers-reduced-motion: reduce) {
+		.acc, .acc:hover { transition: none; }
+		.accounts:hover .acc { transform: translate(-50%, -50%); }
+		.accounts:hover .acc.a1 { transform: translate(-50%, -50%) rotate(-13deg) translate(-96px, 64px) scale(.94); }
+		.accounts:hover .acc.a2 { transform: translate(-50%, -50%) rotate(8deg) translate(84px, 34px) scale(.96); }
+	}
 
-	.download { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-	.dl-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; }
-	.dl-card h3 { margin: 0 0 4px; font-size: 1.1rem; }
-	.dl-card .chip { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-	.dl-links { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-	.dl-links a {
-		display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
-		padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px;
-		text-decoration: none; color: var(--text); background: var(--panel-2); font-size: .94rem;
+	/* ── seções ─────────────────────────────────────────── */
+	section { padding: 84px 0; }
+	.section-alt { background: var(--ink-2); border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+
+	/* downloads: fichas por plataforma */
+	.dl-sheet { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); margin-bottom: 14px; overflow: hidden; }
+	.dl-sheet-head {
+		display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+		padding: 18px 22px; border-bottom: 1px dashed var(--line);
 	}
-	.dl-links a:hover { border-color: var(--accent); }
-	.dl-links .size { color: var(--muted); font-size: .82rem; white-space: nowrap; }
-	.dl-card .note { color: var(--muted); font-size: .85rem; margin: 16px 0 0; }
+	.dl-sheet-head h3 { margin: 0; font-size: 1.02rem; font-weight: 800; letter-spacing: .03em; color: var(--cream); }
+	.dl-sheet-head .chip { font: 500 .66rem/1 var(--font-util); letter-spacing: .14em; text-transform: uppercase; color: var(--signal); }
+	.dl-sheet-head .note { margin: 0 0 0 auto; color: var(--muted); font-size: .82rem; max-width: 54ch; }
+	.dl-links { list-style: none; margin: 0; padding: 0; }
+	.dl-links li + li { border-top: 1px solid var(--line-soft); }
+	.dl-links a {
+		display: flex; align-items: center; gap: 14px;
+		padding: 15px 22px; color: var(--text);
+		transition: background .15s ease, padding-left .15s ease;
+	}
+	.dl-links a:hover { text-decoration: none; background: var(--panel-2); padding-left: 30px; }
+	.dl-links a::before { content: "↓"; font: 500 .95rem/1 var(--font-util); color: var(--signal); flex: none; }
+	.dl-links .fmt { font: 500 .72rem/1 var(--font-util); color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 5px 7px; flex: none; min-width: 76px; text-align: center; }
+	.dl-links .size { margin-left: auto; color: var(--muted); font: 400 .8rem/1 var(--font-util); white-space: nowrap; }
+	.dl-links a.disabled { pointer-events: none; opacity: .35; }
+	.dl-note { color: var(--muted); font-size: .84rem; margin: 10px 2px 26px; }
+	.dl-note code, .callout code, .ic { font-family: var(--font-util); font-size: .86em; background: rgba(0,0,0,.35); border: 1px solid var(--line-soft); padding: 2px 6px; border-radius: 4px; }
 
 	.callout {
-		background: rgba(37, 211, 102, .07); border: 1px solid rgba(37, 211, 102, .3);
-		border-radius: var(--radius); padding: 18px 20px; margin-top: 24px; font-size: .95rem;
+		background: var(--signal-dim); border: 1px solid rgba(74, 222, 128, .28);
+		border-left: 3px solid var(--signal);
+		border-radius: 4px; padding: 18px 22px; margin-top: 30px; font-size: .93rem; color: var(--text);
 	}
-	.callout strong { color: var(--accent); }
-	.callout code { background: rgba(0,0,0,.35); padding: 2px 6px; border-radius: 6px; font-size: .88rem; }
+	.callout strong { color: var(--signal); }
+	.status-line { display: flex; align-items: center; gap: 10px; font: 400 .82rem/1 var(--font-util); color: var(--muted); margin: -22px 0 32px; }
+	.status-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 11px; border-radius: 999px; font-size: .78rem; border: 1px solid var(--line); }
+	.status-ok { color: var(--signal); border-color: rgba(74,222,128,.4); }
+	.status-ok::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
+	.status-warn { color: var(--amber); border-color: rgba(231,176,76,.4); }
 
+	/* recursos: lista-índice numerada */
+	.feat { display: grid; grid-template-columns: 1fr 1fr; column-gap: 56px; margin: 0; padding: 0; list-style: none; counter-reset: feat; }
+	.feat li { counter-increment: feat; padding: 22px 0; border-bottom: 1px solid var(--line-soft); }
+	.feat li:nth-child(odd) { border-right: 1px solid var(--line-soft); padding-right: 40px; }
+	.feat li:nth-child(even) { padding-left: 40px; }
+	.feat li::before {
+		content: counter(feat, decimal-leading-zero);
+		display: block; font: 500 .72rem/1 var(--font-util); letter-spacing: .2em;
+		color: var(--signal); margin-bottom: 10px;
+	}
+	.feat h3 { margin: 0 0 6px; font-size: .98rem; font-weight: 700; letter-spacing: .02em; color: var(--cream); }
+	.feat p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+	/* compatibilidade */
+	.compat { margin: 0; }
+	.compat-row {
+		display: grid; grid-template-columns: 160px 1fr auto; gap: 10px 26px;
+		align-items: baseline; padding: 20px 0; border-bottom: 1px solid var(--line-soft);
+	}
+	.compat-row:first-child { border-top: 1px solid var(--line-soft); }
+	.compat-row dt { font: 700 .95rem/1.3 var(--font-display); text-transform: uppercase; letter-spacing: .04em; color: var(--cream); }
+	.compat-row dd { margin: 0; color: var(--muted); font-size: .92rem; }
+	.v-tag { font: 500 .68rem/1 var(--font-util); letter-spacing: .1em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+	.v-ok { color: var(--signal); border: 1px solid rgba(74,222,128,.4); }
+	.v-warn { color: var(--amber); border: 1px solid rgba(231,176,76,.4); }
+	.v-info { color: var(--violet); border: 1px solid rgba(167,139,250,.4); }
+
+	/* instalação: colunas por SO */
+	.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+	.cols h3 { margin: 0 0 10px; font-size: .92rem; font-weight: 700; letter-spacing: .04em; color: var(--cream); }
+	.cols p { margin: 0; color: var(--muted); font-size: .9rem; }
 	pre {
-		background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-		padding: 16px 18px; overflow-x: auto; font-size: .9rem; margin: 0 0 12px;
+		background: #0a0f10; border: 1px solid var(--line); border-left: 2px solid var(--signal);
+		border-radius: 4px; padding: 16px 18px; overflow-x: auto;
+		font: 400 .84rem/1.7 var(--font-util); color: var(--text); margin: 0 0 14px;
+		white-space: pre;
 	}
-	code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-	ul.plain { color: var(--muted); padding-left: 20px; }
-	ul.plain li { margin: 6px 0; }
-	ul.plain strong { color: var(--text); }
+	.src-block { margin-top: 48px; padding-top: 40px; border-top: 1px solid var(--line-soft); }
+	.src-block h3 { font-size: 1.05rem; font-weight: 800; letter-spacing: .03em; color: var(--cream); margin: 0 0 8px; }
 
-	footer { padding: 40px 0 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; text-align: center; }
-	footer a { color: var(--muted); }
-	.status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .8rem; border: 1px solid var(--line); }
-	.status-ok { color: var(--accent); border-color: rgba(37,211,102,.4); }
-	.status-warn { color: #f0b429; border-color: rgba(240,180,41,.4); }
+	/* scripts locais */
+	.tools { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 8px; }
+	.tools h3 { margin: 0 0 8px; font-size: .98rem; font-weight: 700; letter-spacing: .03em; color: var(--cream); }
+	.tools p { color: var(--muted); font-size: .9rem; margin: 0 0 16px; }
+
+	footer { padding: 48px 0 64px; color: var(--muted); font-size: .86rem; }
+	footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-top: 1px solid var(--line-soft); padding-top: 32px; }
+	footer p { margin: 0 0 6px; }
+	footer a { color: var(--muted); text-decoration: underline; text-decoration-color: var(--line); }
+	footer a:hover { color: var(--text); }
+
+	/* ── responsivo ─────────────────────────────────────── */
+	@media (max-width: 900px) {
+		.hero { padding: 56px 0 64px; }
+		.hero .wrap { grid-template-columns: 1fr; gap: 20px; }
+		.accounts { height: 340px; width: 100%; max-width: 360px; margin: 0 auto; }
+		.acc { margin-left: 0; transform-origin: center; }
+		.acc.a1 { transform: translate(-50%, -50%) rotate(-7deg) translateY(30px) scale(.94); }
+		.feat { grid-template-columns: 1fr; }
+		.feat li:nth-child(odd) { border-right: 0; padding-right: 0; }
+		.feat li:nth-child(even) { padding-left: 0; }
+		.cols, .tools { grid-template-columns: 1fr; gap: 28px; }
+		.compat-row { grid-template-columns: 1fr; }
+		.compat-row .v-tag { justify-self: start; }
+		.dl-sheet-head .note { margin-left: 0; }
+		section { padding: 60px 0; }
+	}
+	@media (max-width: 560px) {
+		.topbar nav a:not(.nav-dl) { display: none; }
+	}
 </style>
 </head>
 <body>
 
-<header class="hero">
+<div class="wrap topbar">
+	<a class="brand" href="#top"><img src="icon.png" alt=""> MultiChat</a>
+	<nav>
+		<a href="#downloads">Downloads</a>
+		<a href="#recursos">Recursos</a>
+		<a href="https://github.com/maiconfontana/multichat">GitHub</a>
+		<a class="nav-dl" href="https://github.com/maiconfontana/multichat/releases/latest">Baixar</a>
+	</nav>
+</div>
+
+<header class="hero" id="top">
 	<div class="wrap">
-		<img class="logo" src="icon.png" alt="Ícone do MultiChat">
-		<h1>Várias contas de mensageiro.<br>Um único aplicativo.</h1>
-		<p class="tagline">
-			Cliente desktop <strong>multi-conta</strong> para WhatsApp, Microsoft Teams, Telegram,
-			Discord, Slack e qualquer URL personalizada — cada conta com login isolado.
-		</p>
-		<div class="cta">
-			<a class="btn btn-primary" href="https://github.com/maiconfontana/multichat/releases/latest">
-				Baixar a versão mais recente
-			</a>
-			<a class="btn btn-ghost" href="https://github.com/maiconfontana/multichat">Ver no GitHub</a>
+		<div>
+			<p class="eyebrow">Desktop · Windows · macOS · Linux</p>
+			<h1>Várias contas.<br>Uma janela.<br><span class="thin">Nenhuma mistura.</span></h1>
+			<p class="tagline">
+				Cada conta roda em <strong>perfil isolado</strong>: WhatsApp, Teams, Telegram,
+				Discord, Slack ou qualquer URL — logado ao mesmo tempo, sem uma sessão derrubar a outra.
+				Grátis, código aberto, sem servidor intermediário.
+			</p>
+			<div class="cta">
+				<a class="btn btn-primary" href="https://github.com/maiconfontana/multichat/releases/latest">Baixar a versão mais recente</a>
+				<a class="btn btn-ghost" href="https://github.com/maiconfontana/multichat">Ver no GitHub</a>
+			</div>
+			<p class="hero-meta">
+				<span id="version-line">Versão —</span>
+				<span><span class="dot">●</span> MIT</span>
+				<span><span class="dot">●</span> Electron</span>
+				<span><span class="dot">●</span> Sem telemetria</span>
+			</p>
 		</div>
-		<p class="meta">
-			<span>Windows</span><span>macOS (Intel e Apple Silicon)</span><span>Linux (AppImage)</span>
-		</p>
-		<p class="meta"><span id="version-line">Versão —</span></p>
+		<div class="accounts" aria-hidden="true">
+			<div class="acc a1">
+				<div class="acc-head">
+					<span class="avatar" style="background:#4f46e5"></span>
+					<span class="acc-name">Time — Slack</span>
+					<span class="acc-app">Slack</span>
+				</div>
+				<div class="bubble">Subi o hotfix do checkout 🚀</div>
+			</div>
+			<div class="acc a2">
+				<div class="acc-head">
+					<span class="avatar" style="background:#7c3aed"></span>
+					<span class="acc-name">Pessoal — Telegram</span>
+					<span class="acc-app">Telegram</span>
+				</div>
+				<div class="bubble">Chego em 10, pega a reserva?</div>
+			</div>
+			<div class="acc a3">
+				<div class="acc-head">
+					<span class="avatar" style="background:#25d366"></span>
+					<span class="acc-name">Trabalho — WhatsApp</span>
+					<span class="acc-app">WhatsApp</span>
+				</div>
+				<div class="bubble out">Enviar o orçamento hoje às 17h, combinado.</div>
+				<span class="unread">3 não lidas</span>
+				<span class="tag">perfil isolado</span>
+			</div>
+		</div>
 	</div>
 </header>
 
 <main>
 
 <section class="wrap" id="downloads">
+	<p class="eyebrow">Instaladores por plataforma</p>
 	<h2>Downloads</h2>
 	<p class="section-sub">
-		Os instaladores são anexados a cada <em>release</em> no GitHub. Escolha o pacote da sua plataforma.
-		<span id="release-status"></span>
+		Cada release publica os pacotes direto no GitHub, com o arquivo
+		<code>SHA256SUMS.txt</code> para conferir a integridade.
 	</p>
+	<p class="status-line" id="release-status"></p>
 
-	<div class="download">
-		<div class="dl-card">
+	<div class="dl-sheet">
+		<div class="dl-sheet-head">
 			<span class="chip">Windows</span>
 			<h3>Windows 10/11 — 64 bits</h3>
-			<ul class="dl-links" id="dl-windows"></ul>
-			<p class="note">O instalador NSIS não é assinado digitalmente: o SmartScreen pode pedir confirmação em “Mais informações → Executar assim mesmo”.</p>
+			<p class="note">Instalador não assinado: o SmartScreen pode pedir “Mais informações → Executar assim mesmo” na primeira execução.</p>
 		</div>
+		<ul class="dl-links" id="dl-windows"></ul>
+	</div>
 
-		<div class="dl-card">
+	<div class="dl-sheet">
+		<div class="dl-sheet-head">
 			<span class="chip">macOS</span>
-			<h3>macOS — Intel e Apple Silicon</h3>
-			<ul class="dl-links" id="dl-macos"></ul>
-			<p class="note">O app não é assinado nem notarizado pela Apple. Na primeira abertura, clique com o botão direito no app → <strong>Abrir</strong>; se aparecer “danificado”, rode <code>xattr -dr com.apple.quarantine /Applications/MultiChat.app</code>.</p>
+			<h3>Intel e Apple Silicon</h3>
+			<p class="note">Sem notarização da Apple: na primeira abertura, botão direito → <strong>Abrir</strong>. Se aparecer “danificado”: <code>xattr -dr com.apple.quarantine /Applications/MultiChat.app</code></p>
 		</div>
+		<ul class="dl-links" id="dl-macos"></ul>
+	</div>
 
-		<div class="dl-card">
+	<div class="dl-sheet">
+		<div class="dl-sheet-head">
 			<span class="chip">Linux</span>
 			<h3>Linux — 64 bits</h3>
-			<ul class="dl-links" id="dl-linux"></ul>
-			<p class="note">O AppImage é portátil: <code>chmod +x MultiChat-*.AppImage</code> e execute. O <code>tar.xz</code> traz a mesma build descompactada.</p>
+			<p class="note">AppImage portátil (<code>chmod +x</code> e execute) ou <code>tar.xz</code> com a mesma build descompactada.</p>
 		</div>
+		<ul class="dl-links" id="dl-linux"></ul>
 	</div>
 
 	<div class="callout">
-		<strong>Sem releases ainda?</strong> Se a lista acima não carregar, abra a
-		<a href="https://github.com/maiconfontana/multichat/releases">página de releases</a> no GitHub
-		para ver todos os artefatos disponíveis, incluindo o arquivo <code>SHA256SUMS.txt</code> para conferir a integridade dos downloads.
+		<strong>A lista não carregou?</strong> A API do GitHub pode estar indisponível ou em
+		rate limit — nada quebra por isso. Abra a
+		<a href="https://github.com/maiconfontana/multichat/releases">página de releases</a>
+		para ver todos os artefatos e o <code>SHA256SUMS.txt</code>.
+	</div>
+</section>
+
+<section class="section-alt" id="recursos">
+	<div class="wrap">
+		<p class="eyebrow">O que já funciona hoje</p>
+		<h2>Recursos</h2>
+		<p class="section-sub">Sem roadmap como promessa: a lista abaixo é o que a versão atual entrega.</p>
+		<ol class="feat">
+			<li>
+				<h3>Isolamento por conta</h3>
+				<p>Perfil de navegação próprio por conta: dois WhatsApp, duas contas do Teams, o que precisar — um login não derruba o outro.</p>
+			</li>
+			<li>
+				<h3>Memória sob controle</h3>
+				<p>Contas carregam sob demanda e suspendem após um tempo sem uso, devolvendo RAM sem perder o login. O prazo é configurável.</p>
+			</li>
+			<li>
+				<h3>Notificações e badges</h3>
+				<p>Notificação nativa com o nome da conta, contador de não lidas na barra lateral e na bandeja, e ícone de tray para não fechar sem querer.</p>
+			</li>
+			<li>
+				<h3>Compartilhamento de tela</h3>
+				<p>Seletor próprio de telas e janelas, funcional no WhatsApp Web.</p>
+			</li>
+			<li>
+				<h3>Assistente contextual</h3>
+				<p>Em contas do WhatsApp, gera um rascunho a partir das mensagens visíveis e insere no campo de edição — o envio continua sendo seu.</p>
+			</li>
+			<li>
+				<h3>Interface offline</h3>
+				<p>Estilos e ícones empacotados no app. A interface desenha sem depender de CDN.</p>
+			</li>
+		</ol>
 	</div>
 </section>
 
 <section class="wrap">
-	<h2>Recursos</h2>
-	<p class="section-sub">O que o MultiChat faz hoje.</p>
-	<div class="grid">
-		<div class="card">
-			<h3>🔐 Isolamento por conta</h3>
-			<p>Cada conta usa seu próprio perfil de navegação: você pode ficar logado em dois WhatsApp, duas contas do Teams, o que precisar — sem uma derrubar a outra.</p>
-		</div>
-		<div class="card">
-			<h3>🪶 Impacto de memória controlado</h3>
-			<p>As contas são carregadas sob demanda e suspendidas após um tempo sem uso, devolvendo RAM sem perder o login. O prazo é configurável.</p>
-		</div>
-		<div class="card">
-			<h3>🔔 Notificações e badges</h3>
-			<p>Notificações nativas com o nome da conta, contador de mensagens não lidas na barra lateral e na bandeja do sistema, e ícone de tray para não fechar sem querer.</p>
-		</div>
-		<div class="card">
-			<h3>🖥️ Compartilhamento de tela</h3>
-			<p>Seletor próprio de telas e janelas, funcional no WhatsApp Web.</p>
-		</div>
-		<div class="card">
-			<h3>🤖 Assistente contextual</h3>
-			<p>Em contas do WhatsApp, gera um rascunho a partir das mensagens visíveis e insere no campo de edição — o envio continua sempre sendo seu.</p>
-		</div>
-		<div class="card">
-			<h3>📴 Interface offline</h3>
-			<p>Estilos e ícones são empacotados no app, sem depender de CDN para desenhar a interface.</p>
-		</div>
-	</div>
-</section>
-
-<section class="wrap">
+	<p class="eyebrow">Transparência</p>
 	<h2>Compatibilidade por plataforma</h2>
-	<p class="section-sub">O que é só limitação de assinatura e o que é limitação real.</p>
-	<div class="grid">
-		<div class="card">
-			<h3>Windows</h3>
-			<p>Aviso do SmartScreen na primeira execução, por falta de certificado de assinatura de código (que é pago). O app funciona normalmente depois de confirmar.</p>
+	<p class="section-sub">O que é limitação de assinatura (pagas, opcionais) e o que é comportamento real do app.</p>
+	<dl class="compat">
+		<div class="compat-row">
+			<dt>Windows</dt>
+			<dd>Aviso do SmartScreen na primeira execução pela falta de certificado de assinatura de código. Depois de confirmar, o app funciona normalmente.</dd>
+			<span class="v-tag v-warn">Assinatura pendente</span>
 		</div>
-		<div class="card">
-			<h3>macOS</h3>
-			<p>Precisa da liberação manual descrita acima. Aqui não existe atalho gratuito: assinatura e notarização exigem o Apple Developer Program pago.</p>
+		<div class="compat-row">
+			<dt>macOS</dt>
+			<dd>Exige a liberação manual descrita na seção de downloads. Assinatura e notarização pedem o Apple Developer Program — não há atalho gratuito.</dd>
+			<span class="v-tag v-warn">Assinatura pendente</span>
 		</div>
-		<div class="card">
-			<h3>Linux</h3>
-			<p>AppImage e tar.xz, 64 bits. Não há repositório APT ou pacote Flatpak/Snap publicado — distribuição direta pelo GitHub Releases.</p>
+		<div class="compat-row">
+			<dt>Linux</dt>
+			<dd>AppImage e tar.xz 64 bits, distribuição direta pelo GitHub Releases. Ainda sem repositório APT, Flatpak ou Snap.</dd>
+			<span class="v-tag v-info">Direto do release</span>
 		</div>
-	</div>
+	</dl>
 </section>
 
-<section class="wrap">
-	<h2>Instalação</h2>
-	<p class="section-sub">Depois de baixar, instale por cima da versão anterior: as contas e preferências são preservadas.</p>
+<section class="section-alt">
+	<div class="wrap">
+		<p class="eyebrow">Três passos</p>
+		<h2>Instalação</h2>
+		<p class="section-sub">Instale por cima da versão anterior: contas e preferências são preservadas.</p>
+		<div class="cols">
+			<div>
+				<h3>Windows</h3>
+<pre><code>MultiChat-&lt;versão&gt;-setup.exe
+→ executar → pronto</code></pre>
+			</div>
+			<div>
+				<h3>macOS</h3>
+<pre><code>abrir o .dmg (arm64 para
+Apple Silicon) → arrastar
+para Aplicativos → liberar
+em Ajustes → Privacidade</code></pre>
+			</div>
+			<div>
+				<h3>Linux</h3>
+<pre><code>chmod +x MultiChat-*.AppImage
+./MultiChat-*.AppImage</code></pre>
+			</div>
+		</div>
 
-	<p><strong>Windows</strong></p>
-	<pre><code>Baixe MultiChat-&lt;versão&gt;-setup.exe e execute.</code></pre>
-
-	<p><strong>macOS</strong></p>
-	<pre><code>Baixe o .dmg correspondente ao seu Mac (arm64 para Apple Silicon),
-arraste o MultiChat para Aplicativos e libere em Ajustes → Privacidade e Segurança.</code></pre>
-
-	<p><strong>Linux</strong></p>
-	<pre><code>chmod +x MultiChat-&lt;versão&gt;.AppImage
-./MultiChat-&lt;versão&gt;.AppImage</code></pre>
-</section>
-
-<section class="wrap">
-	<h2>Rodar do código-fonte</h2>
-	<p class="section-sub">Requer Node.js v24.</p>
+		<div class="src-block">
+			<h3>Rodar do código-fonte</h3>
+			<p class="section-sub" style="margin-bottom:18px">Requer Node.js v24.</p>
 <pre><code>git clone https://github.com/maiconfontana/multichat.git
 cd multichat
 npm install
 npm run start</code></pre>
-	<p class="section-sub" style="margin-top:16px">
-		O repositório traz <code>npm test</code> (testes unitários), <code>npm run check</code>
-		(validação de sintaxe) e os scripts de build por plataforma. Veja o
-		<a href="https://github.com/maiconfontana/multichat#readme">README</a> para o guia completo.
-	</p>
+			<p class="section-sub" style="margin:0">
+				O repositório traz <code>npm test</code> (testes unitários), <code>npm run check</code>
+				(validação de sintaxe) e scripts de build por plataforma — guia completo no
+				<a href="https://github.com/maiconfontana/multichat#readme">README</a>.
+			</p>
+		</div>
+	</div>
 </section>
 
 <section class="wrap" id="build-local">
+	<p class="eyebrow">Sem os avisos do sistema operacional</p>
 	<h2>Atualizar ou compilar localmente</h2>
-	<p class="section-sub">
-		Dois scripts para quem prefere não passar pelos avisos de sistema operacional.
-	</p>
-
-	<div class="grid">
-		<div class="card">
-			<h3>⚡ Atualizar a instalação (Linux)</h3>
-			<p style="margin-bottom:14px">Baixa a última release, confere o SHA-256 publicado e troca o binário de forma atômica, guardando backup:</p>
-			<pre style="margin:0"><code>./update-local.sh
+	<p class="section-sub">Dois caminhos para quem prefere pular SmartScreen e quarentena.</p>
+	<div class="tools">
+		<div>
+			<h3>Atualizar a instalação (Linux)</h3>
+			<p>Baixa a última release, confere o SHA-256 publicado e troca o binário de forma atômica, guardando backup:</p>
+<pre><code>./update-local.sh
 ./update-local.sh --check
 ./update-local.sh --rollback</code></pre>
 		</div>
-
-		<div class="card">
-			<h3>🔨 Compilar na sua máquina</h3>
-			<p style="margin-bottom:14px">Gera um binário sem a marca de origem do download — abre sem SmartScreen (Windows) e sem quarentena (macOS). Custa ~1,3 GB de download:</p>
-			<pre style="margin:0"><code>./build-local.sh</code></pre>
-			<p class="note" style="margin-top:12px">No Windows: <code>.\build-local.ps1</code></p>
+		<div>
+			<h3>Compilar na sua máquina</h3>
+			<p>Gera um binário sem a marca de origem do download — abre sem SmartScreen (Windows) e sem quarentena (macOS). Custa ~1,3 GB de download:</p>
+<pre><code>./build-local.sh      # Linux/macOS
+.\build-local.ps1     # Windows</code></pre>
 		</div>
 	</div>
-
 	<div class="callout">
-		<strong>Qual escolher?</strong> Para a maioria dos casos, o pacote pronto acima é mais
-		simples e mais rápido. Compilar localmente é a alternativa a <em>assinar</em> o aplicativo:
-		num arquivo gerado na própria máquina não existe quarentena nem Mark-of-the-Web para
-		bloquear. Não é um teste de segurança — o projeto não é assinado.
+		<strong>Qual escolher?</strong> Para a maioria dos casos, o pacote pronto é mais simples
+		e mais rápido. Compilar localmente é a alternativa a <em>assinar</em> o aplicativo: num
+		arquivo gerado na própria máquina não existe quarentena nem Mark-of-the-Web para bloquear.
+		Não é um teste de segurança — o projeto não é assinado.
 	</div>
 </section>
 
 </main>
 
-<footer class="wrap">
-	<p>
-		MultiChat é software livre sob licença
-		<a href="https://github.com/maiconfontana/multichat/blob/main/LICENSE">MIT</a>.
-		Código em <a href="https://github.com/maiconfontana/multichat">github.com/maiconfontana/multichat</a>.
-	</p>
-	<p>
-		Derivado de <a href="https://github.com/dagmoller/whatsapp-electron">whatsapp-electron</a>,
-		por sua vez fork de <a href="https://github.com/hmami252/whatsapp-desktop-app">SingleBox</a>.
-		Créditos mantidos.
-	</p>
+<footer>
+	<div class="wrap">
+		<div>
+			<p>MultiChat é software livre sob licença <a href="https://github.com/maiconfontana/multichat/blob/main/LICENSE">MIT</a>.<br>
+			Código em <a href="https://github.com/maiconfontana/multichat">github.com/maiconfontana/multichat</a>.</p>
+		</div>
+		<div>
+			<p>Derivado de <a href="https://github.com/dagmoller/whatsapp-electron">whatsapp-electron</a>,
+			por sua vez fork de <a href="https://github.com/hmami252/whatsapp-desktop-app">SingleBox</a>. Créditos mantidos.</p>
+		</div>
+	</div>
 </footer>
 
 <script>
@@ -308,18 +521,18 @@ npm run start</code></pre>
 
 	var LISTS = {
 		windows: [
-			{ label: "Instalador (.exe)", test: /-setup\.exe$/i },
-			{ label: "Versão portátil (.zip)", test: /-win.*\.zip$/i }
+			{ label: "Instalador", fmt: ".exe", test: /-setup\.exe$/i },
+			{ label: "Versão portátil", fmt: ".zip", test: /-win.*\.zip$/i }
 		],
 		macos: [
-			{ label: "Apple Silicon (.dmg)", test: /-mac-arm64\.dmg$/i },
-			{ label: "Intel (.dmg)", test: /-mac-x64\.dmg$/i },
-			{ label: "Apple Silicon (.zip)", test: /-mac-arm64\.zip$/i },
-			{ label: "Intel (.zip)", test: /-mac-x64\.zip$/i }
+			{ label: "Apple Silicon", fmt: ".dmg", test: /-mac-arm64\.dmg$/i },
+			{ label: "Intel", fmt: ".dmg", test: /-mac-x64\.dmg$/i },
+			{ label: "Apple Silicon", fmt: ".zip", test: /-mac-arm64\.zip$/i },
+			{ label: "Intel", fmt: ".zip", test: /-mac-x64\.zip$/i }
 		],
 		linux: [
-			{ label: "AppImage (.AppImage)", test: /\.AppImage$/i },
-			{ label: "Pacote (.tar.xz)", test: /\.tar\.xz$/i }
+			{ label: "AppImage", fmt: ".AppImage", test: /\.AppImage$/i },
+			{ label: "Pacote", fmt: ".tar.xz", test: /\.tar\.xz$/i }
 		]
 	};
 
@@ -347,14 +560,19 @@ npm run start</code></pre>
 			// O nome completo do arquivo evita ambiguidade entre arquiteturas.
 			a.title = asset.name;
 
-			var left = document.createElement("span");
-			left.textContent = rule.label;
+			var fmt = document.createElement("span");
+			fmt.className = "fmt";
+			fmt.textContent = rule.fmt;
+
+			var label = document.createElement("span");
+			label.textContent = rule.label;
 
 			var right = document.createElement("span");
 			right.className = "size";
 			right.textContent = humanSize(asset.size);
 
-			a.appendChild(left);
+			a.appendChild(fmt);
+			a.appendChild(label);
 			a.appendChild(right);
 			li.appendChild(a);
 			ul.appendChild(li);
@@ -365,7 +583,7 @@ npm run start</code></pre>
 			var link = document.createElement("a");
 			link.href = RELEASES;
 			link.rel = "noopener";
-			link.innerHTML = "<span>Ver na página de releases</span>";
+			link.innerHTML = '<span class="fmt">—</span><span>Ver na página de releases</span>';
 			empty.appendChild(link);
 			ul.appendChild(empty);
 		}
@@ -374,8 +592,10 @@ npm run start</code></pre>
 	function setStatus(text, cls) {
 		var el = document.getElementById("release-status");
 		if (!el) return;
-		el.innerHTML = " " + '<span class="status-pill ' + (cls || "") + '">' + text + "</span>";
+		el.innerHTML = '<span class="status-pill ' + (cls || "") + '">' + text + "</span>";
 	}
+
+	setStatus("Consultando a última release…");
 
 	fetch(API, { headers: { Accept: "application/vnd.github+json" } })
 		.then(function (r) {
@@ -393,12 +613,12 @@ npm run start</code></pre>
 			var versionLine = document.getElementById("version-line");
 			if (versionLine) {
 				var date = release.published_at ? new Date(release.published_at).toLocaleDateString("pt-BR") : "";
-				versionLine.textContent = "Última versão: " + version + (date ? " — publicada em " + date : "");
+				versionLine.textContent = "v" + version + (date ? " · publicada em " + date : "");
 			}
-			setStatus("Release v" + version, "status-ok");
+			setStatus("Release v" + version + " no ar", "status-ok");
 		})
 		.catch(function (err) {
-			setStatus("não foi possível carregar a lista automaticamente", "status-warn");
+			setStatus("API indisponível — use a página de releases abaixo", "status-warn");
 			["dl-windows", "dl-macos", "dl-linux"].forEach(function (id) {
 				fillList(id, [], []);
 			});
