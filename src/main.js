@@ -1,8 +1,8 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, safeStorage, webContents, dialog } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, safeStorage, webContents, nativeTheme, dialog } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
-const { getSuspendAfterMs, formatSuspendPolicy } = require('./resource-policy');
+const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs } = require('./resource-policy');
 const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
 const { requestCompletion, testConnection } = require('./openai-client');
 const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
@@ -29,10 +29,9 @@ for (const arg of process.argv) {
 	}
 }
 
-// Tempo de inatividade antes de suspender (descarregar da RAM) uma conta
-// que não está em exibição. O padrão equilibra atualizações em segundo plano
-// com uso de memória; MULTICHAT_SUSPEND_MINUTES=0 mantém todas conectadas.
-const SUSPEND_AFTER_MS = getSuspendAfterMs();
+// Tempo de inatividade padrão antes de suspender uma conta fora de foco.
+// Contas podem sobrescrever isso em Editar conta; MULTICHAT_SUSPEND_MINUTES=0
+// desliga a hibernação só nas contas que ainda não têm ajuste próprio.
 const BOUNDS_DEBOUNCE_MS = 150;
 const MAX_ACTIVE_NOTIFICATIONS = 100;
 
@@ -41,6 +40,8 @@ class MultiChatApp {
 		this.store      = new Store();
 		this.baseIcon   = path.join(__dirname, "../assets/icon.png");
 		this.trayIcon   = path.join(__dirname, "../assets/icon-32.png");
+		this.macTrayIcon = path.join(__dirname, "../assets/trayTemplate.png");
+		this.tray        = null;
 		this.isQuit     = false;
 		this.spellLangs = ["en-US", "pt-BR"];
 		this.activeId   = null;
@@ -51,6 +52,13 @@ class MultiChatApp {
 			this.sidebarCollapsed = true; // padrão: sidebar recolhida (só ícones)
 			this.store.set("sidebarCollapsed", true);
 		}
+		this.trayEnabled = this.store.get("trayEnabled");
+		if (this.trayEnabled === undefined) {
+			this.trayEnabled = true;
+			this.store.set("trayEnabled", true);
+		}
+		this.sidebarContextOverlay = false;
+		this.darkMode = !!this.store.get("darkMode");
 		this._boundsTimer = null;
 		this.assistantView = null;
 		this.assistantVisible = false;
@@ -78,6 +86,8 @@ class MultiChatApp {
 				label: "MultiChat",
 				submenu: [
 					{ role: "about" },
+					{ type: "separator" },
+					this.trayEnabledMenuItem(),
 					{ type: "separator" },
 					{ role: "services" },
 					{ type: "separator" },
@@ -138,7 +148,19 @@ class MultiChatApp {
 					{ label: "Assistente contextual", accelerator: "CmdOrCtrl+Shift+A", click: () => { this.toggleAssistant(); } },
 					{ role: "togglefullscreen", label: "Tela cheia" },
 					{ type: "separator" },
-					{ label: this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral", click: () => { this.toggleSidebar(); } }
+					{
+						id: "toggle-sidebar",
+						label: this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral",
+						click: () => { this.toggleSidebar(); }
+					},
+					{
+						id: "toggle-dark-mode",
+						label: "Modo escuro",
+						type: "checkbox",
+						checked: this.darkMode,
+						click: (item) => { this.setDarkMode(item.checked); }
+					},
+					this.trayEnabledMenuItem()
 				]
 			},
 			{
@@ -174,7 +196,7 @@ class MultiChatApp {
 		if (langs.length > 0)
 			this.spellLangs = langs;
 		console.log(`MultiChat: Spell Check: ${this.spellLangs}`);
-		console.log(`MultiChat: Suspensão de contas inativas: ${formatSuspendPolicy(SUSPEND_AFTER_MS)}`);
+		console.log(`MultiChat: Hibernação padrão (contas sem ajuste): ${formatSuspendPolicy(getSuspendAfterMs())}`);
 
 		this.registerEvents();
 		this.createWindow();
@@ -194,18 +216,9 @@ class MultiChatApp {
 		this.menu = Menu.buildFromTemplate(this.menuTemplate);
 		Menu.setApplicationMenu(this.menu);
 
-		const trayMenu = Menu.buildFromTemplate([
-			{ label: "Mostrar/ocultar", click: () => { this.showHide(); } },
-			{ type: "separator" },
-			{ label: "Encerrar", click: () => { this.isQuit = true; app.quit(); } }
-		]);
-		const trayImg = fs.existsSync(this.trayIcon)
-			? nativeImage.createFromPath(this.trayIcon)
-			: nativeImage.createFromPath(this.baseIcon);
-		this.tray = new Tray(trayImg);
-		this.tray.setContextMenu(trayMenu);
-		this.tray.setToolTip(Constants.appName);
-		this.tray.on("click", () => { this.showHide(); });
+		if (this.trayEnabled)
+			this.createTray();
+		nativeTheme.on("updated", () => { this.updateTrayBadgeCounter(); });
 
 		this.activeNotifications = [];
 		this.updateCheckInFlight = null;
@@ -248,7 +261,7 @@ class MultiChatApp {
 
 		ipcMain.on(Constants.event.updateBadgeIcon, (event, dataURL) => {
 			if (!this.tray) return;
-			this.tray.setImage(nativeImage.createFromDataURL(dataURL));
+			this.tray.setImage(this.trayImageFromBadgeDataURL(dataURL));
 		});
 
 		ipcMain.on(Constants.event.updateUnreadMessages, (event, data) => {
@@ -267,6 +280,7 @@ class MultiChatApp {
 				type: a.type || "whatsapp",
 				url: a.url || (Constants.services[a.type || "whatsapp"] ? Constants.services[a.type || "whatsapp"].url : Constants.whatsapp.url),
 				notifications: a.notifications || { enabled: true },
+				suspend: normalizeAccountSuspend(a.suspend),
 				unread: this.instances[a.id] ? this.instances[a.id].unread : 0,
 				active: this.activeId === a.id
 			}));
@@ -279,7 +293,8 @@ class MultiChatApp {
 				name: data.name,
 				type: data.type || "whatsapp",
 				url: data.url || svc.url,
-				notifications: { enabled: data.notifications !== false }
+				notifications: { enabled: data.notifications !== false },
+				suspend: normalizeAccountSuspend(data.suspend)
 			};
 			this.accounts.push(account);
 			this.store.set("accounts", this.accounts);
@@ -295,6 +310,7 @@ class MultiChatApp {
 					if (data.type != undefined) this.accounts[i].type = data.type;
 					if (data.url != undefined) this.accounts[i].url = data.url;
 					if (data.notifications != undefined) this.accounts[i].notifications = data.notifications;
+					if (data.suspend != undefined) this.accounts[i].suspend = normalizeAccountSuspend(data.suspend);
 					break;
 				}
 			}
@@ -305,6 +321,7 @@ class MultiChatApp {
 					this.instances[data.id].notifications = data.notifications;
 			}
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+			this.scheduleSuspend(data.id);
 		});
 
 		ipcMain.on(Constants.event.deleteAccount, (event, id) => {
@@ -375,6 +392,14 @@ class MultiChatApp {
 			if (event.sender !== this.sidebarView?.webContents) return;
 			this.toggleSidebar();
 		});
+
+		ipcMain.handle(Constants.event.sidebarContextOverlay, (event, open) => {
+			if (event.sender !== this.sidebarView?.webContents) return false;
+			this.setSidebarContextOverlay(open);
+			return true;
+		});
+
+		ipcMain.handle(Constants.event.getUiTheme, () => !!this.darkMode);
 
 		ipcMain.on(Constants.event.toggleAssistant, event => {
 			if (event.sender !== this.sidebarView?.webContents) return;
@@ -569,11 +594,15 @@ class MultiChatApp {
 	createAssistantView() {
 		if (this.assistantView && !this.assistantView.webContents.isDestroyed()) return;
 		this.assistantView = new WebContentsView({ webPreferences: { preload: path.join(__dirname, 'assistant-preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
-		this.assistantView.setBackgroundColor('#111b21');
+		this.assistantView.setBackgroundColor(this.chromeBackground());
 		this.assistantView.webContents.loadFile(path.join(__dirname, 'assistant.html'));
 		this.assistantView.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 		this.assistantView.setVisible(false);
 		this.window.contentView.addChildView(this.assistantView);
+		this.assistantView.webContents.on('did-finish-load', () => {
+			if (this.assistantView && !this.assistantView.webContents.isDestroyed())
+				this.assistantView.webContents.send(Constants.event.uiTheme, !!this.darkMode);
+		});
 	}
 
 	toggleAssistant(force) {
@@ -594,24 +623,133 @@ class MultiChatApp {
 		this.assistantView.setBounds({ x: b.width - width, y: 0, width, height: b.height });
 	}
 
+	trayEnabledMenuItem() {
+		return {
+			id: "tray-enabled",
+			label: process.platform === "darwin" ? "Mostrar ícone na barra de menus" : "Mostrar ícone na bandeja",
+			type: "checkbox",
+			checked: this.trayEnabled,
+			click: (item) => { this.setTrayEnabled(item.checked); }
+		};
+	}
+
+	buildTrayMenu() {
+		return Menu.buildFromTemplate([
+			{ label: "Mostrar/ocultar", click: () => { this.showHide(); } },
+			{ type: "separator" },
+			this.trayEnabledMenuItem(),
+			{ type: "separator" },
+			{ label: "Encerrar", click: () => { this.isQuit = true; app.quit(); } }
+		]);
+	}
+
+	createTray() {
+		if (this.tray)
+			return;
+		this.tray = new Tray(this.getDefaultTrayImage());
+		this.tray.setContextMenu(this.buildTrayMenu());
+		this.tray.setToolTip(Constants.appName);
+		this.tray.on("click", () => { this.showHide(); });
+		this.updateTrayBadgeCounter();
+	}
+
+	destroyTray() {
+		if (!this.tray)
+			return;
+		this.tray.destroy();
+		this.tray = null;
+		if (this.window && !this.window.isDestroyed() && !this.window.isVisible())
+			this.showHide(false);
+	}
+
+	setTrayEnabled(enabled) {
+		enabled = !!enabled;
+		this.trayEnabled = enabled;
+		this.store.set("trayEnabled", enabled);
+		if (enabled)
+			this.createTray();
+		else
+			this.destroyTray();
+		this.refreshApplicationMenu();
+	}
+
+	syncMenuDynamicItems(items) {
+		if (!items)
+			return;
+		for (const item of items) {
+			if (item.id === "tray-enabled")
+				item.checked = this.trayEnabled;
+			if (item.id === "toggle-sidebar")
+				item.label = this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral";
+			if (item.id === "toggle-dark-mode")
+				item.checked = this.darkMode;
+			if (item.submenu)
+				this.syncMenuDynamicItems(item.submenu);
+		}
+	}
+
+	refreshApplicationMenu() {
+		this.syncMenuDynamicItems(this.menuTemplate);
+		this.menu = Menu.buildFromTemplate(this.menuTemplate);
+		Menu.setApplicationMenu(this.menu);
+	}
+
+	chromeBackground() {
+		return this.darkMode ? "#1c1c1c" : "#111b21";
+	}
+
+	applyUiTheme() {
+		const dark = !!this.darkMode;
+		nativeTheme.themeSource = dark ? "dark" : "system";
+		const bg = this.chromeBackground();
+		if (this.window && !this.window.isDestroyed())
+			this.window.setBackgroundColor(bg);
+		if (this.sidebarView && this.sidebarView.webContents && !this.sidebarView.webContents.isDestroyed())
+			this.sidebarView.webContents.send(Constants.event.uiTheme, dark);
+		if (this.assistantView && this.assistantView.webContents && !this.assistantView.webContents.isDestroyed()) {
+			this.assistantView.setBackgroundColor(bg);
+			this.assistantView.webContents.send(Constants.event.uiTheme, dark);
+		}
+		if (this.sharePicker && !this.sharePicker.isDestroyed()) {
+			this.sharePicker.setBackgroundColor(bg);
+			this.sharePicker.webContents.send(Constants.event.uiTheme, dark);
+		}
+	}
+
+	setDarkMode(enabled) {
+		this.darkMode = !!enabled;
+		this.store.set("darkMode", this.darkMode);
+		this.applyUiTheme();
+		this.refreshApplicationMenu();
+	}
+
 	toggleSidebar() {
+		this.sidebarContextOverlay = false;
 		this.sidebarCollapsed = !this.sidebarCollapsed;
 		this.store.set("sidebarCollapsed", this.sidebarCollapsed);
 		this.updateSidebarBounds();
 		for (const id in this.instances)
 			this.layoutAccountView(id);
-		// Atualiza o label do item de menu correspondente
-		const viewMenu = this.menuTemplate.find(m => m.label === "Exibir");
-		if (viewMenu) {
-			for (const item of viewMenu.submenu) {
-				if (item.label === "Expandir barra lateral" || item.label === "Recolher barra lateral") {
-					item.label = this.sidebarCollapsed ? "Expandir barra lateral" : "Recolher barra lateral";
-					break;
-				}
-			}
-		}
-		if (this.menu) Menu.setApplicationMenu(Menu.buildFromTemplate(this.menuTemplate));
+		this.layoutAssistantView();
+		this.refreshApplicationMenu();
 	}
+
+	setSidebarContextOverlay(open) {
+		this.sidebarContextOverlay = !!open;
+		this.updateSidebarBounds();
+	}
+
+	syncSidebarZOrder() {
+		if (!this.window || !this.sidebarView) return;
+		if (this.sidebarContextOverlay) {
+			this.window.contentView.addChildView(this.sidebarView);
+			return;
+		}
+		this.window.contentView.addChildView(this.sidebarView, 0);
+		if (this.assistantVisible && this.assistantView && !this.assistantView.webContents.isDestroyed())
+			this.window.contentView.addChildView(this.assistantView);
+	}
+
 
 	getEditTarget() {
 		const focused = webContents.getFocusedWebContents();
@@ -636,11 +774,11 @@ class MultiChatApp {
 			width: this.bounds.width,
 			height: this.bounds.height,
 			icon: this.baseIcon,
-			backgroundColor: "#111b21", // pintura inicial escura — evita flash branco
+			backgroundColor: this.chromeBackground(), // pintura inicial — evita flash branco
 			// Mostra de imediato: esta janela não carrega página própria (as views
 			// são filhas), então ready-to-show nunca dispararia e a janela ficaria
 			// invisível. O backgroundColor cuida do flash inicial.
-			show: !process.argv.includes("--start-in-tray")
+			show: !(process.argv.includes("--start-in-tray") && this.trayEnabled)
 		};
 		if (this.bounds.x != null) {
 			options.x = this.bounds.x;
@@ -652,10 +790,19 @@ class MultiChatApp {
 		if (this.bounds.x == null)
 			this.window.center();
 
+		this.applyUiTheme();
+
 		this.window.on("move", () => { this.scheduleStoreBounds(); });
 		this.window.on("resize", () => { this.scheduleStoreBounds(); });
 		this.window.on("close", (e) => {
 			if (this.isQuit) { app.quit(); return; }
+			// Sem ícone na bandeja, esconder a janela no Windows/Linux
+			// deixa o app inacessível. No macOS o Dock ainda reabre.
+			if (!this.trayEnabled && process.platform !== "darwin") {
+				this.isQuit = true;
+				app.quit();
+				return;
+			}
 			e.preventDefault();
 			this.window.hide();
 		});
@@ -669,7 +816,7 @@ class MultiChatApp {
 				nodeIntegration: false
 			}
 		});
-		this.sidebarView.setBackgroundColor('#111b21');
+		this.sidebarView.setBackgroundColor('#00000000');
 		this.sidebarView.webContents.loadFile(path.join(__dirname, "accounts.html"));
 		// Envio imediato (cobre o caso do listener já registrado)…
 		this.sidebarView.webContents.send(Constants.event.initResources, { constants: ConstantsForIPC() });
@@ -688,6 +835,7 @@ class MultiChatApp {
 			this.sidebarView.webContents.send(Constants.event.activeAccount, this.activeId);
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 			this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
+			this.sidebarView.webContents.send(Constants.event.uiTheme, !!this.darkMode);
 		});
 	}
 
@@ -808,12 +956,14 @@ class MultiChatApp {
 	}
 
 	scheduleSuspend(id) {
-		const inst = this.instances[id];
-		if (SUSPEND_AFTER_MS === 0 || !inst || !inst.view || id === this.activeId) return;
 		this.clearSuspendTimer(id);
+		const inst = this.instances[id];
+		if (!inst || !inst.view || id === this.activeId) return;
+		const afterMs = getAccountSuspendAfterMs(this.accounts.find(a => a.id === id));
+		if (afterMs === 0) return;
 		inst.suspendTimer = setTimeout(() => {
 			this.suspendAccount(id);
-		}, SUSPEND_AFTER_MS);
+		}, afterMs);
 	}
 
 	suspendAccount(id) {
@@ -894,10 +1044,11 @@ class MultiChatApp {
 
 	updateSidebarBounds() {
 		if (!this.sidebarView) return;
-		const h = this.window.getContentBounds().height;
-		const sbw = this.getSidebarWidth();
-		this.sidebarView.setBounds({ x: 0, y: 0, width: sbw, height: h });
+		const b = this.window.getContentBounds();
+		const width = this.sidebarContextOverlay ? b.width : this.getSidebarWidth();
+		this.sidebarView.setBounds({ x: 0, y: 0, width, height: b.height });
 		this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
+		this.syncSidebarZOrder();
 	}
 
 	scheduleStoreBounds() {
@@ -917,6 +1068,40 @@ class MultiChatApp {
 		this.layoutAssistantView();
 	}
 
+	getDefaultTrayImage() {
+		if (process.platform === "darwin" && fs.existsSync(this.macTrayIcon)) {
+			const img = nativeImage.createEmpty();
+			img.addRepresentation({
+				scaleFactor: 1,
+				buffer: fs.readFileSync(this.macTrayIcon)
+			});
+			const retinaPath = this.macTrayIcon.replace(/\.png$/, "@2x.png");
+			if (fs.existsSync(retinaPath)) {
+				img.addRepresentation({
+					scaleFactor: 2,
+					buffer: fs.readFileSync(retinaPath)
+				});
+			}
+			img.setTemplateImage(true);
+			return img;
+		}
+		const iconPath = fs.existsSync(this.trayIcon) ? this.trayIcon : this.baseIcon;
+		return nativeImage.createFromPath(iconPath);
+	}
+
+	// O canvas do badge no mac é 44px (@2x de 22pt). Sem scaleFactor o
+	// Electron trata isso como 44 pontos lógicos e o ícone explode na barra.
+	trayImageFromBadgeDataURL(dataURL) {
+		const img = nativeImage.createFromDataURL(dataURL);
+		if (process.platform !== "darwin")
+			return img;
+		const retina = nativeImage.createFromBuffer(img.toPNG(), { scaleFactor: 2 });
+		const { width } = retina.getSize();
+		if (width > 22)
+			return retina.resize({ width: 22, height: 22, quality: "best" });
+		return retina;
+	}
+
 	updateTrayBadgeCounter() {
 		if (!this.tray) return;
 		let counter = 0;
@@ -924,15 +1109,16 @@ class MultiChatApp {
 			counter += this.instances[id].unread;
 
 		if (counter == 0) {
-			this.tray.setImage(fs.existsSync(this.trayIcon)
-				? nativeImage.createFromPath(this.trayIcon)
-				: nativeImage.createFromPath(this.baseIcon));
+			this.tray.setImage(this.getDefaultTrayImage());
 			this.tray.setToolTip(Constants.appName);
 			return;
 		}
 		this.tray.setToolTip(`${Constants.appName} — ${counter} não lidas`);
 		if (this.sidebarView)
-			this.sidebarView.webContents.send(Constants.event.buildBadgeIcon, counter);
+			this.sidebarView.webContents.send(Constants.event.buildBadgeIcon, {
+				counter,
+				dark: nativeTheme.shouldUseDarkColors
+			});
 	}
 
 	reloadCurrentView() {
@@ -1033,7 +1219,7 @@ class MultiChatApp {
 			show: false,
 			autoHideMenuBar: true,
 			title: "Compartilhar tela",
-			backgroundColor: "#111b21",
+			backgroundColor: this.chromeBackground(),
 			icon: this.baseIcon,
 			webPreferences: {
 				preload: path.join(__dirname, "screenshare-preload.js"),
@@ -1042,6 +1228,10 @@ class MultiChatApp {
 			}
 		});
 		this.sharePicker.loadFile(path.join(__dirname, "screenshare.html"));
+		this.sharePicker.webContents.on("did-finish-load", () => {
+			if (this.sharePicker && !this.sharePicker.isDestroyed())
+				this.sharePicker.webContents.send(Constants.event.uiTheme, !!this.darkMode);
+		});
 		this.sharePicker.once("ready-to-show", () => this.sharePicker.show());
 		this.sharePicker.on("closed", () => { this.sharePicker = null; });
 		// Se o usuário fechar a janela sem escolher, cancela o pedido pendente

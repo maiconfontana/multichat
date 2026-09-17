@@ -6,43 +6,73 @@
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/bootstrap-icons.css">
   <style>
-    html, body { height: 100%; margin: 0; }
+    :root {
+      --sb-width: 280px;
+      --sb-collapsed-width: 72px;
+      --ui-bg: #111b21;
+      --ui-surface: #202c33;
+      --ui-elevated: #2a3942;
+      --ui-hover: #374248;
+      --ui-text: #e9edef;
+      --ui-muted: #8696a0;
+      --ui-border: #2a3942;
+      --ui-accent: #00a884;
+      --ui-accent-hover: #00c4a0;
+      --ui-danger: #f97066;
+      --ui-danger-soft: rgba(249, 112, 102, .12);
+      --ui-accent-soft: rgba(0, 168, 132, .25);
+    }
+    body.theme-dark {
+      color-scheme: dark;
+      --ui-bg: #1c1c1c;
+      --ui-surface: #2b2b2b;
+      --ui-elevated: #3a3a3a;
+      --ui-hover: #454545;
+      --ui-text: #f2f2f2;
+      --ui-muted: #a3a3a3;
+      --ui-border: #444444;
+    }
+    html, body { height: 100%; margin: 0; background: transparent; }
     body {
-      background: #111b21;
-      color: #e9edef;
+      color: var(--ui-text);
       font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
       user-select: none;
     }
-    #sb-root { display: flex; flex-direction: column; height: 100vh; }
+    #sb-root {
+      display: flex; flex-direction: column;
+      height: 100vh; width: var(--sb-width);
+      background: var(--ui-bg);
+      overflow: hidden;
+    }
 
     #sb-header {
       display: flex; align-items: center; gap: 10px;
       padding: 14px 14px 10px 14px;
-      background: #202c33;
+      background: var(--ui-surface);
       flex-wrap: nowrap;
     }
     #sb-header .logo { width: 32px; height: 32px; flex: 0 0 32px; }
     #sb-header .title { font-size: 16px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
     #sb-header .spacer { flex: 1; min-width: 0; }
     .icon-btn {
-      background: transparent; color: #8696a0; border: none;
+      background: transparent; color: var(--ui-muted); border: none;
       width: 30px; height: 30px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 30px;
     }
-    .icon-btn:hover { background: #374248; color: #e9edef; }
+    .icon-btn:hover { background: var(--ui-hover); color: var(--ui-text); }
     #btn-add {
-      background: #00a884; color: #fff; border: none;
+      background: var(--ui-accent); color: #fff; border: none;
       width: 30px; height: 30px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-size: 16px; line-height: 1; cursor: pointer; flex: 0 0 30px;
     }
-    #btn-add:hover { background: #00c4a0; }
+    #btn-add:hover { background: var(--ui-accent-hover); }
 
     #sb-list { flex: 1; overflow-y: auto; padding: 8px 6px; }
     #sb-list::-webkit-scrollbar { width: 6px; }
-    #sb-list::-webkit-scrollbar-thumb { background: #2a3942; border-radius: 3px; }
+    #sb-list::-webkit-scrollbar-thumb { background: var(--ui-elevated); border-radius: 3px; }
 
     .acct-item {
       display: flex; align-items: center; gap: 11px;
@@ -51,8 +81,8 @@
       -webkit-user-drag: none;
     }
     .acct-item * { -webkit-user-drag: none; }
-    .acct-item:hover { background: #202c33; }
-    .acct-item.active { background: #2a3942; }
+    .acct-item:hover { background: var(--ui-surface); }
+    .acct-item.active { background: var(--ui-elevated); }
     .acct-item.is-dragging { opacity: .55; }
 
     .acct-avatar-wrap {
@@ -67,11 +97,11 @@
     .acct-avatar svg { width: 24px; height: 24px; }
     .acct-meta { flex: 1; min-width: 0; }
     .acct-name { font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .acct-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8696a0; margin-top: 1px; }
-    .notif-off { font-size: 13px; color: #8696a0; }
+    .acct-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ui-muted); margin-top: 1px; }
+    .notif-off { font-size: 13px; color: var(--ui-muted); }
 
     .acct-unread {
-      background: #00a884; color: #fff; font-size: 12px; font-weight: 700;
+      background: var(--ui-accent); color: #fff; font-size: 12px; font-weight: 700;
       min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
       display: none; align-items: center; justify-content: center;
     }
@@ -81,23 +111,25 @@
        mas o wrap deixa o badge sair por cima da borda. */
     .acct-unread-badge {
       position: absolute; top: -4px; right: -4px;
-      background: #00a884; color: #fff; font-size: 10px; font-weight: 700;
+      background: var(--ui-accent); color: #fff; font-size: 10px; font-weight: 700;
       min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
       display: none; align-items: center; justify-content: center;
       box-sizing: border-box; z-index: 1;
-      border: 2px solid #111b21;
+      border: 2px solid var(--ui-bg);
     }
 
     .acct-actions { display: none; gap: 1px; }
     .acct-item:hover .acct-actions { display: flex; }
     .acct-item:hover .acct-unread { display: none !important; }
     .acct-actions button {
-      background: transparent; border: none; color: #8696a0;
+      background: transparent; border: none; color: var(--ui-muted);
       font-size: 14px; padding: 4px; line-height: 1; cursor: pointer; border-radius: 6px;
     }
-    .acct-actions button:hover { background: #374248; color: #e9edef; }
+    .acct-actions button:hover { background: var(--ui-hover); color: var(--ui-text); }
+    .acct-actions .acct-del:hover { color: var(--ui-danger); }
 
     /* ── Modo recolhido (só ícones) ── */
+    body.collapsed #sb-root { width: var(--sb-collapsed-width); }
     body.collapsed #sb-header { flex-direction: column; padding: 10px 0 8px 0; gap: 8px; }
     body.collapsed #sb-header .title { display: none; }
     body.collapsed #sb-header .spacer { display: none; }
@@ -107,12 +139,12 @@
     body.collapsed .acct-item .acct-unread { display: none !important; }
     body.collapsed .acct-item .acct-actions { display: none !important; }
     body.collapsed .acct-unread-badge.show { display: flex; }
-    body.collapsed .acct-item.active .acct-unread-badge { border-color: #2a3942; }
-    body.collapsed .acct-item:hover .acct-unread-badge { border-color: #202c33; }
+    body.collapsed .acct-item.active .acct-unread-badge { border-color: var(--ui-elevated); }
+    body.collapsed .acct-item:hover .acct-unread-badge { border-color: var(--ui-surface); }
     body.collapsed #sb-empty { font-size: 12px; padding: 30px 4px; }
     body.collapsed #sb-empty i { font-size: 26px; }
 
-    #sb-empty { display: none; text-align: center; color: #8696a0; padding: 40px 20px; font-size: 14px; }
+    #sb-empty { display: none; text-align: center; color: var(--ui-muted); padding: 40px 20px; font-size: 14px; }
     #sb-empty i { font-size: 40px; display: block; margin-bottom: 12px; opacity: .5; }
 
     /* Modal compacto — cabe numa sidebar de 280px (e na recolhida de 72px) */
@@ -120,18 +152,80 @@
     #deleteModal .modal-dialog { margin: 8px auto; max-width: calc(100% - 16px); width: 252px; }
 
     .form-check-input {
-      background-color: #111b21;
-      border-color: #2a3942;
+      background-color: var(--ui-bg);
+      border-color: var(--ui-border);
     }
     .form-check-input:checked {
-      background-color: #00a884;
-      border-color: #00a884;
+      background-color: var(--ui-accent);
+      border-color: var(--ui-accent);
     }
     .form-switch .form-check-input:focus {
-      border-color: #00a884;
-      box-shadow: 0 0 0 .25rem rgba(0, 168, 132, .25);
+      border-color: var(--ui-accent);
+      box-shadow: 0 0 0 .25rem var(--ui-accent-soft);
     }
     .form-label { font-size: 13px; }
+    #suspend-group .form-control:focus {
+      border-color: var(--ui-accent);
+      box-shadow: 0 0 0 .25rem var(--ui-accent-soft);
+    }
+    #suspend-group .input-group-text {
+      font-size: 12px;
+    }
+    .ui-modal {
+      background: var(--ui-surface);
+      color: var(--ui-text);
+      border: 1px solid var(--ui-border);
+    }
+    .ui-field,
+    .ui-field:focus {
+      background-color: var(--ui-bg);
+      color: var(--ui-text);
+      border-color: var(--ui-border);
+      box-shadow: none;
+    }
+    .ui-addon {
+      background-color: var(--ui-bg);
+      color: var(--ui-muted);
+      border-color: var(--ui-border);
+    }
+    .btn-save-accent {
+      background: var(--ui-accent);
+      border-color: var(--ui-accent);
+    }
+
+    .acct-ctx {
+      position: fixed; z-index: 4000;
+      min-width: 214px; padding: 6px;
+      background: var(--ui-surface); color: var(--ui-text);
+      border: 1px solid var(--ui-border); border-radius: 10px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+    }
+    .acct-ctx[hidden] { display: none !important; }
+    .acct-ctx-item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; border: none; background: transparent;
+      color: inherit; text-align: left;
+      font-size: 13px; line-height: 1.2;
+      padding: 8px 10px; border-radius: 7px; cursor: pointer;
+    }
+    .acct-ctx-item i { width: 16px; font-size: 14px; color: var(--ui-muted); }
+    .acct-ctx-item:hover,
+    .acct-ctx-item:focus-visible { background: var(--ui-elevated); outline: none; }
+    .acct-ctx-item:hover i,
+    .acct-ctx-item:focus-visible i { color: var(--ui-text); }
+    .acct-ctx-item.danger { color: var(--ui-danger); }
+    .acct-ctx-item.danger i { color: var(--ui-danger); }
+    .acct-ctx-item.danger:hover,
+    .acct-ctx-item.danger:focus-visible { background: var(--ui-danger-soft); }
+    .acct-ctx-item:disabled { opacity: .45; cursor: not-allowed; }
+    .acct-ctx-sep { height: 1px; margin: 5px 8px; background: var(--ui-border); }
+    #acct-ctx-backdrop {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      left: var(--sb-width); z-index: 3999;
+      background: rgba(0, 0, 0, 0.001);
+    }
+    body.collapsed #acct-ctx-backdrop { left: var(--sb-collapsed-width); }
+    #acct-ctx-backdrop[hidden] { display: none !important; }
   </style>
 </head>
 <body>
@@ -149,10 +243,27 @@
     <div id="sb-empty"><i class="bi bi-chat-dots"></i>Nenhuma conta ainda.<br>Toque no <b>+</b> para adicionar.</div>
   </div>
 
+  <div id="acct-ctx-backdrop" hidden></div>
+  <div id="acct-context-menu" class="acct-ctx" hidden role="menu" aria-label="Opções da conta">
+    <button type="button" class="acct-ctx-item" role="menuitem" data-action="edit">
+      <i class="bi bi-pencil"></i>
+      <span>Editar conta</span>
+    </button>
+    <button type="button" class="acct-ctx-item" role="menuitem" data-action="notif">
+      <i class="bi bi-bell-fill"></i>
+      <span>Desligar notificações</span>
+    </button>
+    <div class="acct-ctx-sep" role="separator"></div>
+    <button type="button" class="acct-ctx-item danger" role="menuitem" data-action="remove">
+      <i class="bi bi-trash3"></i>
+      <span>Remover</span>
+    </button>
+  </div>
+
   <!-- Modal Adicionar / Editar -->
   <div class="modal fade" id="accountModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm">
-      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+      <div class="modal-content ui-modal">
         <div class="modal-header py-2 border-secondary">
           <h1 class="modal-title fs-6" id="accountModalLabel">Nova conta</h1>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -164,7 +275,7 @@
 
             <div class="mb-2">
               <label for="acct-type" class="form-label mb-1">Tipo de serviço:</label>
-              <select class="form-select form-select-sm" id="acct-type" style="background:#111b21; color:#e9edef; border-color:#2a3942;">
+              <select class="form-select form-select-sm ui-field" id="acct-type">
                 <option value="whatsapp">WhatsApp</option>
                 <option value="teams">Microsoft Teams</option>
                 <option value="telegram">Telegram</option>
@@ -176,24 +287,38 @@
 
             <div class="mb-2">
               <label for="acct-name" class="form-label mb-1">Nome / Descrição:</label>
-              <input type="text" class="form-control form-control-sm" id="acct-name" style="background:#111b21; color:#e9edef; border-color:#2a3942;" placeholder="Ex: Pessoal, Trabalho..." required>
+              <input type="text" class="form-control form-control-sm ui-field" id="acct-name" placeholder="Ex: Pessoal, Trabalho..." required>
               <div class="invalid-feedback text-danger">O nome é obrigatório!</div>
             </div>
 
             <div class="mb-2" id="url-group" style="display:none;">
               <label for="acct-url" class="form-label mb-1">URL:</label>
-              <input type="url" class="form-control form-control-sm" id="acct-url" style="background:#111b21; color:#e9edef; border-color:#2a3942;" placeholder="https://...">
+              <input type="url" class="form-control form-control-sm ui-field" id="acct-url" placeholder="https://...">
             </div>
 
             <div class="form-check form-switch mt-3">
               <input class="form-check-input" type="checkbox" id="acct-notif-switch" checked>
               <label class="form-check-label" for="acct-notif-switch" style="font-size:13px;">Notificações desktop</label>
             </div>
+
+            <div class="form-check form-switch mt-2">
+              <input class="form-check-input" type="checkbox" id="acct-suspend-switch" checked>
+              <label class="form-check-label" for="acct-suspend-switch" style="font-size:13px;">Hibernar conta inativa</label>
+            </div>
+            <div class="mt-2" id="suspend-group">
+              <label for="acct-suspend-minutes" class="form-label mb-1">Tempo de inatividade:</label>
+              <div class="input-group input-group-sm">
+                <input type="number" class="form-control form-control-sm ui-field" id="acct-suspend-minutes" min="1" max="1440" step="1" value="60" inputmode="numeric">
+                <span class="input-group-text ui-addon">min</span>
+              </div>
+              <div class="form-text mb-0" style="font-size:11px; color:var(--ui-muted);">Sai da memória até você reabrir a conta.</div>
+              <div class="invalid-feedback text-danger" id="suspend-minutes-feedback">Informe um valor entre 1 e 1440 minutos.</div>
+            </div>
           </form>
         </div>
         <div class="modal-footer py-2 border-secondary">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="button" class="btn btn-sm btn-primary acct-save" style="background:#00a884; border-color:#00a884;">Salvar</button>
+          <button type="button" class="btn btn-sm btn-primary acct-save btn-save-accent">Salvar</button>
         </div>
       </div>
     </div>
@@ -202,7 +327,7 @@
   <!-- Modal Remover -->
   <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm">
-      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+      <div class="modal-content ui-modal">
         <div class="modal-header py-2 border-secondary">
           <h1 class="modal-title fs-6">Remover conta</h1>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>

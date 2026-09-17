@@ -6,5 +6,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld("electron", {
 	getShareSources: () => ipcRenderer.invoke("get-share-sources"),
 	setShareSelected: (id) => ipcRenderer.send("set-share-selected", id),
-	setShareCancelled: () => ipcRenderer.send("set-share-cancelled")
+	setShareCancelled: () => ipcRenderer.send("set-share-cancelled"),
+	getUiTheme: () => ipcRenderer.invoke("get-ui-theme"),
+	onUiTheme: (cb) => ipcRenderer.on("ui-theme", (e, dark) => cb(!!dark))
 });

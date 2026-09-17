@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('assistant', {
 	generate: payload => ipcRenderer.invoke('assistant:generate', payload),
 	insertDraft: payload => ipcRenderer.invoke('assistant:insert-draft', payload),
 	close: () => ipcRenderer.send('assistant:close'),
-	openExternal: url => ipcRenderer.invoke('assistant:open-external', url)
+	openExternal: url => ipcRenderer.invoke('assistant:open-external', url),
+	getUiTheme: () => ipcRenderer.invoke('get-ui-theme'),
+	onUiTheme: cb => ipcRenderer.on('ui-theme', (e, dark) => cb(!!dark))
 });

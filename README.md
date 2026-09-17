@@ -113,7 +113,7 @@ npm run start
 | `--disable-gpu` | Desabilita aceleração de hardware (útil em terminais/remotos) |
 | `--spell-lang=xx-XX` | Idioma adicional da correção ortográfica (ex.: `--spell-lang=es-ES`) |
 
-A variável de ambiente `MULTICHAT_SUSPEND_MINUTES` controla por quanto tempo uma conta inativa permanece conectada. O padrão é `60`; use `0` para nunca suspender ou um valor entre `0` e `1440` minutos. Quanto maior o prazo e o número de contas abertas, maior o uso de RAM.
+A hibernação (descarregar da RAM uma conta fora de foco) é configurável por conta em **Editar conta**. O padrão é 60 minutos; desligar o interruptor mantém aquela conta sempre carregada. A variável de ambiente `MULTICHAT_SUSPEND_MINUTES` ainda vale como padrão das contas que nunca foram ajustadas (`0` = nunca hibernar, máximo `1440`). Quanto maior o prazo e o número de contas abertas, maior o uso de RAM.
 
 Exemplo:
 
@@ -127,7 +127,7 @@ MULTICHAT_SUSPEND_MINUTES=120 npm run start -- --start-in-tray --disable-gpu
 2. **Adicionar conta**: clique no **＋** no topo da sidebar, escolha o tipo de serviço (WhatsApp, Teams, Telegram, Discord, Slack ou URL personalizada) e dê um nome. A sidebar expande sozinha se estiver recolhida.
 3. **Alternar de conta**: clique no avatar na sidebar (ou `Ctrl+Tab` / `Ctrl+Shift+Tab`). A conta é carregada na primeira vez que for aberta.
 4. **Recolher/expandir sidebar**: clique no botão de **painel** no topo da sidebar. No modo recolhido, o contador de não lidas aparece como badge sobre o avatar.
-5. **Editar/remover conta**: passe o mouse sobre o item e use os botões de lápis e pessoa-com-x. A remoção apaga o login daquela conta.
+5. **Editar/remover conta**: passe o mouse sobre o item e use os botões de lápis e lixeira (ou botão direito no ícone, com a sidebar recolhida). Em **Editar conta** dá para ligar/desligar a hibernação e o tempo de inatividade. A remoção apaga o login daquela conta.
 6. **Notificações**: o botão de sino por conta liga/desliga as notificações do sistema.
 7. **Assistente contextual**: numa conta WhatsApp, abra em **Exibir → Assistente contextual** (`Ctrl/Cmd+Shift+A`), configure um gateway compatível com OpenAI (Responses API ou Chat Completions), a chave e os perfis de agente. A chave é criptografada pelo `safeStorage` do Electron; testar uma chave digitada não a salva, e com o campo vazio o teste usa a chave já salva. Pesquisa web só é habilitada para gateway marcado como capaz e no modo Responses API. Confira o rascunho antes de inseri-lo; o envio permanece sempre manual. Teams e outros serviços ainda não são suportados.
 8. **Minimizar para a bandeja**: o botão fechar (X) esconde a janela; o ícone na bandeja mostra/oculta.

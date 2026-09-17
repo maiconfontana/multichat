@@ -106,6 +106,9 @@ Constants.event.toggleNotifications     = "toggle-notifications";
 Constants.event.toggleSidebar           = "toggle-sidebar";
 Constants.event.toggleAssistant         = "toggle-assistant";
 Constants.event.sidebarState            = "sidebar-state";
+Constants.event.sidebarContextOverlay   = "sidebar-context-overlay";
+Constants.event.getUiTheme              = "get-ui-theme";
+Constants.event.uiTheme                 = "ui-theme";
 
 Constants.event.getShareSources   = "get-share-sources";
 Constants.event.setShareSelected  = "set-share-selected";
