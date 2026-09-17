@@ -6,27 +6,41 @@
   <link href="vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="vendor/bootstrap-icons.css">
   <style>
+    :root {
+      --ui-bg: #111b21;
+      --ui-surface: #202c33;
+      --ui-text: #e9edef;
+      --ui-border: #2a3942;
+      --ui-accent: #00a884;
+    }
+    body.theme-dark {
+      --ui-bg: #1c1c1c;
+      --ui-surface: #2b2b2b;
+      --ui-text: #f2f2f2;
+      --ui-border: #444444;
+    }
     html, body { height: 100%; margin: 0; }
     body {
-      background: #111b21;
-      color: #e9edef;
+      background: var(--ui-bg);
+      color: var(--ui-text);
       font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       overflow: hidden;
       user-select: none;
     }
     .modal { position: static; display: block; z-index: auto; }
-    .card { background: #202c33; border-color: #2a3942; cursor: pointer; }
-    .card.selected { border-color: #00a884; box-shadow: 0 0 0 2px #00a88466; }
+    .card { background: var(--ui-surface); border-color: var(--ui-border); cursor: pointer; }
+    .card.selected { border-color: var(--ui-accent); box-shadow: 0 0 0 2px #00a88466; }
     .card:hover { border-color: #00a88488; }
     .card img { height: 110px; object-fit: cover; }
     .card .form-check-input { pointer-events: none; }
     .btn-outline-success { --bs-btn-color: #00a884; --bs-btn-border-color: #00a884; --bs-btn-hover-bg: #00a884; --bs-btn-hover-border-color: #00a884; --bs-btn-hover-color: #fff; }
+    .ui-modal { background: var(--ui-surface); color: var(--ui-text); border: 1px solid var(--ui-border); }
   </style>
 </head>
 <body>
   <div class="modal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-      <div class="modal-content" style="background:#202c33; color:#e9edef; border:1px solid #2a3942;">
+      <div class="modal-content ui-modal">
         <div class="modal-header py-2">
           <h1 class="modal-title fs-5"><i class="bi bi-display"></i> Compartilhar tela</h1>
         </div>
@@ -94,6 +108,10 @@
     };
 
     document.querySelectorAll('input[name="share-kind"]').forEach(el => el.addEventListener("change", render));
+
+    const applyTheme = (dark) => document.body.classList.toggle("theme-dark", !!dark);
+    if (window.electron.getUiTheme) window.electron.getUiTheme().then(applyTheme).catch(() => {});
+    if (window.electron.onUiTheme) window.electron.onUiTheme(applyTheme);
 
     window.electron.getShareSources().then((list) => {
       sources = list || [];

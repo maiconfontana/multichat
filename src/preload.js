@@ -76,6 +76,9 @@ contextBridge.exposeInMainWorld("electron", {
 	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants && Constants.event.toggleNotifications, { id, enabled }),
 	toggleSidebar: () => ipcRenderer.send(Constants && Constants.event.toggleSidebar),
 	toggleAssistant: () => ipcRenderer.send(Constants && Constants.event.toggleAssistant),
+	setSidebarContextOverlay: (open) => ipcRenderer.invoke(Constants && Constants.event.sidebarContextOverlay, !!open),
+	getUiTheme: () => ipcRenderer.invoke(Constants && Constants.event.getUiTheme),
+	onUiTheme: (cb) => ipcRenderer.on("ui-theme", (e, dark) => cb(!!dark)),
 	onSidebarState: (cb) => ipcRenderer.on("sidebar-state", (e, collapsed) => cb(collapsed)),
 
 	reloadAccounts: (cb) => ipcRenderer.on("reload-accounts", cb),
