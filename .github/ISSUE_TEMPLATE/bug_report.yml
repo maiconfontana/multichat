@@ -1,0 +1,120 @@
+name: Relatar bug
+description: Algo não funciona como deveria no MultiChat
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar! **Este formulário é público.**
+        Não inclua chaves de API, tokens, dados de conversas ou qualquer outro dado sensível.
+
+        Para vulnerabilidades de segurança, use o canal privado descrito na
+        [Política de Segurança](https://github.com/maiconfontana/multichat/blob/main/SECURITY.md) —
+        **não abra uma issue pública**.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Verificações iniciais
+      options:
+        - label: Procurei nas issues existentes e não encontrei o mesmo problema
+          required: true
+        - label: Estou usando a versão mais recente do MultiChat
+          required: true
+        - label: Li a [Política de Segurança](https://github.com/maiconfontana/multichat/blob/main/SECURITY.md) e isto não é uma vulnerabilidade
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descrição do problema
+      description: O que aconteceu, de forma objetiva.
+      placeholder: Ao alternar para uma conta suspensa, a tela fica branca e a sidebar some.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamento esperado
+      description: O que deveria ter acontecido.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      description: Liste os passos na ordem. Se o bug não for reproduzível sempre, diga com que frequência ocorre.
+      placeholder: |
+        1. Abra o MultiChat com duas contas
+        2. Deixe a segunda conta inativa por 60 minutos
+        3. Clique no avatar dela na sidebar
+        4. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Versão do MultiChat
+      description: Aparece no `package.json`, nas notas da release ou na janela do app.
+      placeholder: "1.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operacional
+      options:
+        - Linux (x64)
+        - Linux (arm64)
+        - Windows (x64)
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+    validations:
+      required: true
+
+  - type: input
+    id: os-details
+    attributes:
+      label: Detalhes do sistema
+      description: "Distribuição e versão (ex.: Ubuntu 24.04), versão do Windows ou do macOS."
+      placeholder: "Ubuntu 24.04.3 LTS"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Como você instalou
+      options:
+        - AppImage
+        - tar.xz
+        - Instalador NSIS (Windows)
+        - zip (Windows)
+        - dmg / zip (macOS)
+        - Rodando do código-fonte (npm start)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs e mensagens de erro
+      description: |
+        Saída do terminal ao rodar `npm run start`, ou o console do desenvolvedor
+        (`Ctrl+Shift+I`). **Revise o conteúdo antes de colar** e remova chaves, tokens e dados de conversas.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexto adicional
+      description: Capturas de tela, mudanças de configuração, flags usadas, número de contas abertas, ambiente headless etc.
+    validations:
+      required: false

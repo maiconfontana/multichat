@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Relatar vulnerabilidade de segurança
+    url: https://github.com/maiconfontana/multichat/security/advisories/new
+    about: Canal privado. Não abra issue pública para falhas de segurança.
+  - name: 💬 Dúvidas e uso geral
+    url: https://github.com/maiconfontana/multichat/blob/main/CONTRIBUTING.md#dúvidas
+    about: Consulte o guia de contribuição antes de abrir uma issue de dúvida.
+  - name: 📖 Documentação e instalação
+    url: https://github.com/maiconfontana/multichat#readme
+    about: Requisitos, instalação, flags de linha de comando e build.
