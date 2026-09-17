@@ -11,6 +11,58 @@ Use WhatsApp, Microsoft Teams, Telegram, Discord, Slack (ou qualquer URL persona
 
 > Projeto derivado de [whatsapp-electron](https://github.com/dagmoller/whatsapp-electron) (fork de [SingleBox](https://github.com/hmami252/whatsapp-desktop-app)).
 
+🌐 **Página do projeto e downloads:** <https://maiconfontana.github.io/multichat/>
+
+---
+
+## Download
+
+Baixe o pacote da sua plataforma — nada de compilar:
+
+| Plataforma | Arquivo | Observação |
+|---|---|---|
+| **Windows** 10/11 (x64) | `MultiChat-<versão>-setup.exe` | Instalador NSIS. Sem assinatura de código: o SmartScreen pede confirmação em *Mais informações → Executar assim mesmo* |
+| **Windows** (portátil) | `MultiChat-<versão>-win-x64.zip` | Descompacte e execute; nada é instalado |
+| **macOS** Apple Silicon | `MultiChat-<versão>-mac-arm64.dmg` | Veja [macOS: primeira abertura](#macos-primeira-abertura) |
+| **macOS** Intel | `MultiChat-<versão>-mac-x64.dmg` | idem |
+| **Linux** (x64) | `MultiChat-<versão>.AppImage` | `chmod +x` e execute |
+| **Linux** (x64) | `multichat-<versão>.tar.xz` | Mesma build descompactada |
+
+Os arquivos ficam na [página de releases](https://github.com/maiconfontana/multichat/releases)
+junto com `SHA256SUMS.txt`, para conferir a integridade do download:
+
+```bash
+sha256sum -c SHA256SUMS.txt   # Linux
+shasum -a 256 -c SHA256SUMS.txt   # macOS
+```
+
+Ao instalar uma versão nova, instale por cima da anterior: contas e preferências são preservadas.
+
+### macOS: primeira abertura
+
+O app não é assinado nem notarizado pela Apple (isso exige o Apple Developer Program, pago).
+Na primeira execução:
+
+1. Clique com o botão direito no app → **Abrir** → **Abrir** (ou libere em *Ajustes do Sistema → Privacidade e Segurança*).
+2. Se o macOS disser que o app está “danificado” (acontece com arquivos baixados), remova a marca de quarentena:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/MultiChat.app
+   ```
+
+## Atualizações
+
+O app verifica a versão publicada no GitHub — a checagem é silenciosa, alguns segundos após abrir, e só
+incomoda quando existe versão mais nova. O aviso oferece abrir o download no navegador; a instalação
+continua sendo sua decisão, nada é baixado nem instalado automaticamente.
+
+- **Automaticamente:** ao iniciar (consulta à API de releases, 8 s de timeout, falha silenciosa).
+- **Manualmente:** menu **Ajuda → Verificar atualizações…**, que mostra também quando você já está na versão mais recente.
+- **Menu Ajuda:** atalhos para a página do projeto, a página de downloads e o formulário de issues.
+
+A comparação de versões (`src/update-check.js`) é um módulo puro, coberto por testes em
+`test/update-check.test.js`.
+
 ---
 
 ## Funcionalidades
@@ -104,7 +156,22 @@ Os pacotes saem na pasta `dist/`.
 
 > **Release automática**: tags no formato `v*.*.*` disparam o workflow
 > [.github/workflows/release.yml](.github/workflows/release.yml), que builda
-> Linux, Windows e macOS e publica um GitHub Release com os artefatos.
+> Linux, Windows e macOS em runners separados, gera `SHA256SUMS.txt` e publica
+> um GitHub Release com todos os artefatos:
+>
+> ```bash
+> npm run bump minor                     # sobe a versão em package.json + src/constants.js
+> npm test                               # confirma, inclusive a sincronia das versões
+> git commit -am "chore: release 1.6.0"
+> git tag v1.6.0
+> git push origin main --follow-tags
+> ```
+
+> **Página pública**: `docs/` é publicado no GitHub Pages por
+> [.github/workflows/pages.yml](.github/workflows/pages.yml) em
+> <https://maiconfontana.github.io/multichat/>. A página lista os downloads
+> consultando a última release em tempo de execução, então publicar uma versão
+> nova não exige republicar o site.
 
 ## Estrutura do projeto
 
@@ -113,6 +180,7 @@ Os pacotes saem na pasta `dist/`.
 │   ├── main.js               # processo principal (janela, sidebar, contas, tray, lazy-load)
 │   ├── constants.js          # nome do app, serviços suportados, eventos IPC
 │   ├── resource-policy.js    # política configurável de suspensão de contas
+│   ├── update-check.js       # comparação de versão e consulta de releases (sem Electron)
 │   ├── assistant.html/js     # painel lateral do assistente contextual
 │   ├── assistant-preload.js  # ponte IPC isolada do painel
 │   ├── assistant-core.js     # validação e montagem do contexto
@@ -127,6 +195,7 @@ Os pacotes saem na pasta `dist/`.
 │   ├── screenshare-preload.js# ponte IPC do seletor
 │   └── vendor/               # bootstrap + ícones servidos localmente (sem CDN)
 ├── assets/                   # ícones do app (png + ico)
+├── docs/                     # página pública publicada no GitHub Pages
 ├── scripts/gen-icon.js       # gera derivados do ícone a partir do PNG mestre
 └── package.json              # metadata + config do electron-builder
 ```

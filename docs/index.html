@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MultiChat — várias contas de mensageiros em um só app</title>
+<meta name="description" content="MultiChat: cliente desktop multi-conta para WhatsApp, Teams, Telegram, Discord, Slack e URLs personalizadas. Grátis, código aberto, para Windows, macOS e Linux.">
+<meta property="og:title" content="MultiChat — várias contas em um só app">
+<meta property="og:description" content="Cliente desktop multi-conta para mensageiros web. Grátis e de código aberto.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="icon.png">
+<link rel="icon" href="icon.png">
+<style>
+	:root {
+		--bg: #0b141a;
+		--panel: #111b21;
+		--panel-2: #1a252b;
+		--line: #22343c;
+		--text: #e9edef;
+		--muted: #8696a0;
+		--accent: #25d366;
+		--accent-dark: #128c7e;
+		--radius: 14px;
+	}
+	* { box-sizing: border-box; }
+	html { scroll-behavior: smooth; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--text);
+		font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	a { color: var(--accent); }
+	.wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+
+	header.hero {
+		padding: 64px 0 48px;
+		background:
+			radial-gradient(900px 400px at 50% -120px, rgba(37, 211, 102, .18), transparent 70%),
+			var(--panel);
+		border-bottom: 1px solid var(--line);
+		text-align: center;
+	}
+	.hero img.logo { width: 104px; height: 104px; border-radius: 24px; }
+	h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; margin: 20px 0 12px; letter-spacing: -.02em; }
+	.hero p.tagline { color: var(--muted); font-size: 1.15rem; max-width: 640px; margin: 0 auto 28px; }
+	.cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+	.btn {
+		display: inline-flex; align-items: center; gap: 8px;
+		padding: 13px 22px; border-radius: 999px; font-weight: 600;
+		text-decoration: none; border: 1px solid transparent; transition: transform .12s ease, background .12s ease;
+	}
+	.btn:hover { transform: translateY(-1px); }
+	.btn-primary { background: var(--accent); color: #06251a; }
+	.btn-primary:hover { background: #1fbe5b; }
+	.btn-ghost { border-color: var(--line); color: var(--text); background: rgba(255,255,255,.02); }
+	.hero .meta { margin-top: 20px; color: var(--muted); font-size: .9rem; }
+	.hero .meta span { white-space: nowrap; }
+	.hero .meta span + span::before { content: " · "; }
+
+	section { padding: 56px 0; }
+	section + section { border-top: 1px solid var(--line); }
+	h2 { font-size: 1.55rem; margin: 0 0 8px; letter-spacing: -.01em; }
+	.section-sub { color: var(--muted); margin: 0 0 28px; }
+
+	.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+	.card {
+		background: var(--panel); border: 1px solid var(--line);
+		border-radius: var(--radius); padding: 22px;
+	}
+	.card h3 { margin: 0 0 8px; font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+	.card p { margin: 0; color: var(--muted); font-size: .95rem; }
+	.card .os-icon { width: 22px; height: 22px; flex: none; }
+
+	.download { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+	.dl-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; display: flex; flex-direction: column; }
+	.dl-card h3 { margin: 0 0 4px; font-size: 1.1rem; }
+	.dl-card .chip { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+	.dl-links { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+	.dl-links a {
+		display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+		padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px;
+		text-decoration: none; color: var(--text); background: var(--panel-2); font-size: .94rem;
+	}
+	.dl-links a:hover { border-color: var(--accent); }
+	.dl-links .size { color: var(--muted); font-size: .82rem; white-space: nowrap; }
+	.dl-card .note { color: var(--muted); font-size: .85rem; margin: 16px 0 0; }
+
+	.callout {
+		background: rgba(37, 211, 102, .07); border: 1px solid rgba(37, 211, 102, .3);
+		border-radius: var(--radius); padding: 18px 20px; margin-top: 24px; font-size: .95rem;
+	}
+	.callout strong { color: var(--accent); }
+	.callout code { background: rgba(0,0,0,.35); padding: 2px 6px; border-radius: 6px; font-size: .88rem; }
+
+	pre {
+		background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+		padding: 16px 18px; overflow-x: auto; font-size: .9rem; margin: 0 0 12px;
+	}
+	code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+	ul.plain { color: var(--muted); padding-left: 20px; }
+	ul.plain li { margin: 6px 0; }
+	ul.plain strong { color: var(--text); }
+
+	footer { padding: 40px 0 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; text-align: center; }
+	footer a { color: var(--muted); }
+	.status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .8rem; border: 1px solid var(--line); }
+	.status-ok { color: var(--accent); border-color: rgba(37,211,102,.4); }
+	.status-warn { color: #f0b429; border-color: rgba(240,180,41,.4); }
+</style>
+</head>
+<body>
+
+<header class="hero">
+	<div class="wrap">
+		<img class="logo" src="icon.png" alt="Ícone do MultiChat">
+		<h1>Várias contas de mensageiro.<br>Um único aplicativo.</h1>
+		<p class="tagline">
+			Cliente desktop <strong>multi-conta</strong> para WhatsApp, Microsoft Teams, Telegram,
+			Discord, Slack e qualquer URL personalizada — cada conta com login isolado.
+		</p>
+		<div class="cta">
+			<a class="btn btn-primary" href="https://github.com/maiconfontana/multichat/releases/latest">
+				Baixar a versão mais recente
+			</a>
+			<a class="btn btn-ghost" href="https://github.com/maiconfontana/multichat">Ver no GitHub</a>
+		</div>
+		<p class="meta">
+			<span>Windows</span><span>macOS (Intel e Apple Silicon)</span><span>Linux (AppImage)</span>
+		</p>
+		<p class="meta"><span id="version-line">Versão —</span></p>
+	</div>
+</header>
+
+<main>
+
+<section class="wrap" id="downloads">
+	<h2>Downloads</h2>
+	<p class="section-sub">
+		Os instaladores são anexados a cada <em>release</em> no GitHub. Escolha o pacote da sua plataforma.
+		<span id="release-status"></span>
+	</p>
+
+	<div class="download">
+		<div class="dl-card">
+			<span class="chip">Windows</span>
+			<h3>Windows 10/11 — 64 bits</h3>
+			<ul class="dl-links" id="dl-windows"></ul>
+			<p class="note">O instalador NSIS não é assinado digitalmente: o SmartScreen pode pedir confirmação em “Mais informações → Executar assim mesmo”.</p>
+		</div>
+
+		<div class="dl-card">
+			<span class="chip">macOS</span>
+			<h3>macOS — Intel e Apple Silicon</h3>
+			<ul class="dl-links" id="dl-macos"></ul>
+			<p class="note">O app não é assinado nem notarizado pela Apple. Na primeira abertura, clique com o botão direito no app → <strong>Abrir</strong>; se aparecer “danificado”, rode <code>xattr -dr com.apple.quarantine /Applications/MultiChat.app</code>.</p>
+		</div>
+
+		<div class="dl-card">
+			<span class="chip">Linux</span>
+			<h3>Linux — 64 bits</h3>
+			<ul class="dl-links" id="dl-linux"></ul>
+			<p class="note">O AppImage é portátil: <code>chmod +x MultiChat-*.AppImage</code> e execute. O <code>tar.xz</code> traz a mesma build descompactada.</p>
+		</div>
+	</div>
+
+	<div class="callout">
+		<strong>Sem releases ainda?</strong> Se a lista acima não carregar, abra a
+		<a href="https://github.com/maiconfontana/multichat/releases">página de releases</a> no GitHub
+		para ver todos os artefatos disponíveis, incluindo o arquivo <code>SHA256SUMS.txt</code> para conferir a integridade dos downloads.
+	</div>
+</section>
+
+<section class="wrap">
+	<h2>Recursos</h2>
+	<p class="section-sub">O que o MultiChat faz hoje.</p>
+	<div class="grid">
+		<div class="card">
+			<h3>🔐 Isolamento por conta</h3>
+			<p>Cada conta usa seu próprio perfil de navegação: você pode ficar logado em dois WhatsApp, duas contas do Teams, o que precisar — sem uma derrubar a outra.</p>
+		</div>
+		<div class="card">
+			<h3>🪶 Impacto de memória controlado</h3>
+			<p>As contas são carregadas sob demanda e suspendidas após um tempo sem uso, devolvendo RAM sem perder o login. O prazo é configurável.</p>
+		</div>
+		<div class="card">
+			<h3>🔔 Notificações e badges</h3>
+			<p>Notificações nativas com o nome da conta, contador de mensagens não lidas na barra lateral e na bandeja do sistema, e ícone de tray para não fechar sem querer.</p>
+		</div>
+		<div class="card">
+			<h3>🖥️ Compartilhamento de tela</h3>
+			<p>Seletor próprio de telas e janelas, funcional no WhatsApp Web.</p>
+		</div>
+		<div class="card">
+			<h3>🤖 Assistente contextual</h3>
+			<p>Em contas do WhatsApp, gera um rascunho a partir das mensagens visíveis e insere no campo de edição — o envio continua sempre sendo seu.</p>
+		</div>
+		<div class="card">
+			<h3>📴 Interface offline</h3>
+			<p>Estilos e ícones são empacotados no app, sem depender de CDN para desenhar a interface.</p>
+		</div>
+	</div>
+</section>
+
+<section class="wrap">
+	<h2>Compatibilidade por plataforma</h2>
+	<p class="section-sub">O que é só limitação de assinatura e o que é limitação real.</p>
+	<div class="grid">
+		<div class="card">
+			<h3>Windows</h3>
+			<p>Aviso do SmartScreen na primeira execução, por falta de certificado de assinatura de código (que é pago). O app funciona normalmente depois de confirmar.</p>
+		</div>
+		<div class="card">
+			<h3>macOS</h3>
+			<p>Precisa da liberação manual descrita acima. Aqui não existe atalho gratuito: assinatura e notarização exigem o Apple Developer Program pago.</p>
+		</div>
+		<div class="card">
+			<h3>Linux</h3>
+			<p>AppImage e tar.xz, 64 bits. Não há repositório APT ou pacote Flatpak/Snap publicado — distribuição direta pelo GitHub Releases.</p>
+		</div>
+	</div>
+</section>
+
+<section class="wrap">
+	<h2>Instalação</h2>
+	<p class="section-sub">Depois de baixar, instale por cima da versão anterior: as contas e preferências são preservadas.</p>
+
+	<p><strong>Windows</strong></p>
+	<pre><code>Baixe MultiChat-&lt;versão&gt;-setup.exe e execute.</code></pre>
+
+	<p><strong>macOS</strong></p>
+	<pre><code>Baixe o .dmg correspondente ao seu Mac (arm64 para Apple Silicon),
+arraste o MultiChat para Aplicativos e libere em Ajustes → Privacidade e Segurança.</code></pre>
+
+	<p><strong>Linux</strong></p>
+	<pre><code>chmod +x MultiChat-&lt;versão&gt;.AppImage
+./MultiChat-&lt;versão&gt;.AppImage</code></pre>
+</section>
+
+<section class="wrap">
+	<h2>Rodar do código-fonte</h2>
+	<p class="section-sub">Requer Node.js v24.</p>
+<pre><code>git clone https://github.com/maiconfontana/multichat.git
+cd multichat
+npm install
+npm run start</code></pre>
+	<p class="section-sub" style="margin-top:16px">
+		O repositório traz <code>npm test</code> (testes unitários), <code>npm run check</code>
+		(validação de sintaxe) e os scripts de build por plataforma. Veja o
+		<a href="https://github.com/maiconfontana/multichat#readme">README</a> para o guia completo.
+	</p>
+</section>
+
+</main>
+
+<footer class="wrap">
+	<p>
+		MultiChat é software livre sob licença
+		<a href="https://github.com/maiconfontana/multichat/blob/main/LICENSE">MIT</a>.
+		Código em <a href="https://github.com/maiconfontana/multichat">github.com/maiconfontana/multichat</a>.
+	</p>
+	<p>
+		Derivado de <a href="https://github.com/dagmoller/whatsapp-electron">whatsapp-electron</a>,
+		por sua vez fork de <a href="https://github.com/hmami252/whatsapp-desktop-app">SingleBox</a>.
+		Créditos mantidos.
+	</p>
+</footer>
+
+<script>
+// Preenche a lista de downloads a partir da última release do GitHub.
+// Se a API falhar (offline, rate limit), a página continua utilizável: os
+// botões principais levam direto à página de releases.
+(function () {
+	var API = "https://api.github.com/repos/maiconfontana/multichat/releases/latest";
+	var RELEASES = "https://github.com/maiconfontana/multichat/releases";
+
+	var LISTS = {
+		windows: [
+			{ label: "Instalador (.exe)", test: /-setup\.exe$/i },
+			{ label: "Versão portátil (.zip)", test: /-win.*\.zip$/i }
+		],
+		macos: [
+			{ label: "Apple Silicon (.dmg)", test: /-mac-arm64\.dmg$/i },
+			{ label: "Intel (.dmg)", test: /-mac-x64\.dmg$/i },
+			{ label: "Apple Silicon (.zip)", test: /-mac-arm64\.zip$/i },
+			{ label: "Intel (.zip)", test: /-mac-x64\.zip$/i }
+		],
+		linux: [
+			{ label: "AppImage (.AppImage)", test: /\.AppImage$/i },
+			{ label: "Pacote (.tar.xz)", test: /\.tar\.xz$/i }
+		]
+	};
+
+	function humanSize(bytes) {
+		if (!bytes && bytes !== 0) return "";
+		var mb = bytes / (1024 * 1024);
+		return mb >= 1024 ? (mb / 1024).toFixed(2) + " GB" : mb.toFixed(1) + " MB";
+	}
+
+	function fillList(containerId, rules, assets) {
+		var ul = document.getElementById(containerId);
+		if (!ul) return;
+		ul.innerHTML = "";
+		var found = 0;
+
+		rules.forEach(function (rule) {
+			var asset = assets.find(function (a) { return rule.test.test(a.name || ""); });
+			if (!asset) return;
+			found++;
+
+			var li = document.createElement("li");
+			var a = document.createElement("a");
+			a.href = asset.browser_download_url;
+			a.rel = "noopener";
+			// O nome completo do arquivo evita ambiguidade entre arquiteturas.
+			a.title = asset.name;
+
+			var left = document.createElement("span");
+			left.textContent = rule.label;
+
+			var right = document.createElement("span");
+			right.className = "size";
+			right.textContent = humanSize(asset.size);
+
+			a.appendChild(left);
+			a.appendChild(right);
+			li.appendChild(a);
+			ul.appendChild(li);
+		});
+
+		if (found === 0) {
+			var empty = document.createElement("li");
+			var link = document.createElement("a");
+			link.href = RELEASES;
+			link.rel = "noopener";
+			link.innerHTML = "<span>Ver na página de releases</span>";
+			empty.appendChild(link);
+			ul.appendChild(empty);
+		}
+	}
+
+	function setStatus(text, cls) {
+		var el = document.getElementById("release-status");
+		if (!el) return;
+		el.innerHTML = " " + '<span class="status-pill ' + (cls || "") + '">' + text + "</span>";
+	}
+
+	fetch(API, { headers: { Accept: "application/vnd.github+json" } })
+		.then(function (r) {
+			if (!r.ok) throw new Error("HTTP " + r.status);
+			return r.json();
+		})
+		.then(function (release) {
+			var assets = release.assets || [];
+			var version = String(release.tag_name || "").replace(/^v/i, "");
+
+			fillList("dl-windows", LISTS.windows, assets);
+			fillList("dl-macos", LISTS.macos, assets);
+			fillList("dl-linux", LISTS.linux, assets);
+
+			var versionLine = document.getElementById("version-line");
+			if (versionLine) {
+				var date = release.published_at ? new Date(release.published_at).toLocaleDateString("pt-BR") : "";
+				versionLine.textContent = "Última versão: " + version + (date ? " — publicada em " + date : "");
+			}
+			setStatus("Release v" + version, "status-ok");
+		})
+		.catch(function (err) {
+			setStatus("não foi possível carregar a lista automaticamente", "status-warn");
+			["dl-windows", "dl-macos", "dl-linux"].forEach(function (id) {
+				fillList(id, [], []);
+			});
+			console.warn("MultiChat site: falha ao consultar releases —", err.message);
+		});
+})();
+</script>
+
+</body>
+</html>

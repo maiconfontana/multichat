@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, safeStorage, webContents } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, Notification, desktopCapturer, session, shell, safeStorage, webContents, dialog } = require('electron');
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
@@ -6,6 +6,10 @@ const { getSuspendAfterMs, formatSuspendPolicy } = require('./resource-policy');
 const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
 const { requestCompletion, testConnection } = require('./openai-client');
 const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
+const { checkForUpdate, PAGE_URL: RELEASES_URL } = require('./update-check');
+
+// Página pública do projeto (GitHub Pages, publicada a partir de docs/).
+const SITE_URL = "https://maiconfontana.github.io/multichat/";
 
 // Constantes serializáveis para enviar aos renderers via IPC (sem funções,
 // que não atravessam a ponte — ver initResources / init*Instance).
@@ -86,6 +90,10 @@ class MultiChatApp {
 			});
 		}
 
+		// O rótulo da versão é preenchido em init(), quando Constants já existe.
+		this.versionMenuItem = { label: "Versão", enabled: false };
+		this.updateMenuItem = { label: "Verificar atualizações…", click: () => { this.checkForUpdates({ userInitiated: true }); } };
+
 		this.menuTemplate = [
 			...appMenu,
 			{
@@ -136,7 +144,12 @@ class MultiChatApp {
 			{
 				label: "Ajuda",
 				submenu: [
-					{ label: "Version undefined by me", enabled: false },
+					this.versionMenuItem,
+					this.updateMenuItem,
+					{ type: "separator" },
+					{ label: "Página do projeto", click: () => { shell.openExternal(SITE_URL); } },
+					{ label: "Página de downloads", click: () => { shell.openExternal(RELEASES_URL); } },
+					{ label: "Relatar um problema", click: () => { shell.openExternal(`${RELEASES_URL.replace(/\/releases\/latest$/, "")}/issues/new/choose`); } },
 					{ type: "separator" },
 					quitItem
 				]
@@ -173,8 +186,11 @@ class MultiChatApp {
 		if (this.accounts.length > 0)
 			this.setCurrentView(this.accounts[0].id);
 
-		this.menuTemplate[this.menuTemplate.length - 1].submenu[0].label =
-			`Versão ${Constants.version} (Electron@${process.versions.electron})`;
+		// Usa a versão empacotada (package.json) quando disponível; Constants.version
+		// funciona como reserva para execução direta do código-fonte.
+		this.currentVersion = app.getVersion() || Constants.version;
+		this.versionMenuItem.label =
+			`Versão ${this.currentVersion} (Electron@${process.versions.electron})`;
 		this.menu = Menu.buildFromTemplate(this.menuTemplate);
 		Menu.setApplicationMenu(this.menu);
 
@@ -192,6 +208,10 @@ class MultiChatApp {
 		this.tray.on("click", () => { this.showHide(); });
 
 		this.activeNotifications = [];
+		this.updateCheckInFlight = null;
+
+		// Checagem silenciosa de versão: só avisa se houver release mais nova.
+		this.scheduleUpdateCheck();
 	}
 
 	registerEvents() {
@@ -929,6 +949,71 @@ class MultiChatApp {
 			this.instances[this.activeId].view.webContents.openDevTools({ mode: "detach" });
 		else if (this.sidebarView)
 			this.sidebarView.webContents.openDevTools({ mode: "detach" });
+	}
+
+	// ── Verificação de atualizações ──
+	// Consulta a última release pública e, se houver versão nova, avisa o
+	// usuário e oferece o download no navegador. Não baixa nem instala nada.
+	async checkForUpdates({ userInitiated = false } = {}) {
+		if (this.updateCheckInFlight) return this.updateCheckInFlight;
+
+		this.updateCheckInFlight = (async () => {
+			const result = await checkForUpdate({
+				currentVersion: this.currentVersion || app.getVersion(),
+				platform: process.platform
+			});
+
+			const version = result.latestVersion || result.currentVersion;
+			if (result.status === "update") {
+				const { response } = await dialog.showMessageBox(this.window, {
+					type: "info",
+					title: "Atualização disponível",
+					message: `O MultiChat ${version} já está disponível.`,
+					detail: `Você está usando a versão ${result.currentVersion}. O download será aberto no seu navegador; instale por cima da versão atual — as contas configuradas são preservadas.`,
+					buttons: ["Baixar agora", "Mais tarde"],
+					defaultId: 0,
+					cancelId: 1,
+					noLink: true
+				});
+				if (response === 0) await shell.openExternal(result.downloadUrl || result.releaseUrl);
+			} else if (result.status === "current") {
+				if (userInitiated) {
+					await dialog.showMessageBox(this.window, {
+						type: "info",
+						title: "Sem atualizações",
+						message: `Você já está na versão mais recente (${result.currentVersion}).`,
+						buttons: ["OK"],
+						noLink: true
+					});
+				}
+			} else if (userInitiated) {
+				await dialog.showMessageBox(this.window, {
+					type: "warning",
+					title: "Não foi possível verificar",
+					message: "A verificação de atualizações falhou.",
+					detail: `Motivo: ${result.reason || "desconhecido"}. Confira a conexão e tente novamente, ou baixe manualmente na página de releases.`,
+					buttons: ["Abrir página de downloads", "Fechar"],
+					defaultId: 0,
+					cancelId: 1,
+					noLink: true
+				}).then(({ response }) => {
+					if (response === 0) return shell.openExternal(RELEASES_URL);
+				});
+			}
+
+			return result;
+		})().finally(() => { this.updateCheckInFlight = null; });
+
+		return this.updateCheckInFlight;
+	}
+
+	// Checagem silenciosa alguns segundos após a janela abrir: não interrompe
+	// a inicialização e só incomoda o usuário quando há de fato versão nova.
+	scheduleUpdateCheck(delayMs = 6000) {
+		const timer = setTimeout(() => {
+			this.checkForUpdates().catch((err) => console.warn(`MultiChat: Verificação de atualização falhou: ${err.message}`));
+		}, delayMs);
+		if (timer.unref) timer.unref();
 	}
 
 	// ── Compartilhamento de tela ──

@@ -1,102 +1,162 @@
 name: Build and Release
 
+# Dispara ao empurrar uma tag de versão (ex.: v1.6.0) ou manualmente.
+# Os pacotes são publicados em um GitHub Release, que é a fonte usada tanto
+# pela página pública (docs/index.html) quanto pela checagem de versão do app.
 on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-release:
+  build-linux:
+    name: Build Linux
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout Repositório
+      - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      - name: Setup node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24.11.1'
           cache: 'npm'
 
-      - name: Install Deps
+      - name: Instalar dependências
         run: npm ci
 
-      - name: Run Pack
-        run: |
-          npm run clean
-          npm run pack
+      - name: Validar sintaxe
+        run: npm run check
 
-      - name: Build Linux
-        run: |
-          npm run dist:linux -- --publish=never
+      - name: Rodar testes
+        run: npm test
 
-      - name: Build Windows
+      - name: Gerar AppImage e tar.xz
+        run: npm run dist:linux -- --publish=never
+
+      - name: Guardar artefatos
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          if-no-files-found: error
+          path: |
+            dist/MultiChat-*.AppImage
+            dist/*.tar.xz
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.11.1'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Gerar instalador NSIS e zip
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: |
-          npm run dist:windows -- --publish=never
+        run: npm run dist:windows -- --publish=never
 
-      - name: Upload Packages
+      - name: Guardar artefatos
         uses: actions/upload-artifact@v4
         with:
-          name: dist-artifacts
+          name: dist-windows
+          if-no-files-found: error
           path: |
-            dist/MultiChat-*.tar.xz
-            dist/MultiChat-*.AppImage
-            dist/MultiChat-*-win.zip
             dist/MultiChat-*-setup.exe
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/MultiChat-*.tar.xz
-            dist/MultiChat-*.AppImage
             dist/MultiChat-*-win.zip
-            dist/MultiChat-*-setup.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-macos:
+    name: Build macOS
     runs-on: macos-latest
-
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout Repositório
+      - name: Checkout do repositório
         uses: actions/checkout@v4
 
-      - name: Setup node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24.11.1'
           cache: 'npm'
 
-      - name: Install Deps
+      - name: Instalar dependências
         run: npm ci
 
-      - name: Build macOS (x64 + arm64)
-        run: |
-          npm run dist:mac -- --publish=never
+      # Sem certificado da Apple o build sai sem assinatura nem notarização:
+      # o usuário precisa liberar o app na primeira abertura (ver README).
+      - name: Gerar dmg e zip (Intel e Apple Silicon)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run dist:mac -- --publish=never
 
-      - name: Upload Packages
+      - name: Guardar artefatos
         uses: actions/upload-artifact@v4
         with:
-          name: dist-artifacts-macos
+          name: dist-macos
+          if-no-files-found: error
           path: |
             dist/MultiChat-*.dmg
             dist/MultiChat-*-mac*.zip
 
-      - name: Add macOS artifacts to Release
+  release:
+    name: Publicar Release
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Exigir uma tag de versão
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          echo "Este workflow publica releases e só roda em tags no formato v*.*.*."
+          echo "Crie e empurre a tag: git tag v1.6.0 && git push origin v1.6.0"
+          exit 1
+
+      - name: Baixar todos os artefatos
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Conferir artefatos recebidos
+        run: ls -lh dist
+
+      # Checksums SHA-256 publicados junto com os binários, para quem quiser
+      # conferir o download antes de instalar.
+      - name: Gerar checksums SHA-256
+        run: |
+          cd dist
+          sha256sum MultiChat-* *.tar.xz > SHA256SUMS.txt || true
+          cat SHA256SUMS.txt
+
+      - name: Criar GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          name: MultiChat ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
           files: |
+            dist/MultiChat-*.AppImage
+            dist/*.tar.xz
+            dist/MultiChat-*-setup.exe
+            dist/MultiChat-*-win.zip
             dist/MultiChat-*.dmg
             dist/MultiChat-*-mac*.zip
+            dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
