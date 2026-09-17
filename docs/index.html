@@ -252,6 +252,37 @@ npm run start</code></pre>
 	</p>
 </section>
 
+<section class="wrap" id="build-local">
+	<h2>Atualizar ou compilar localmente</h2>
+	<p class="section-sub">
+		Dois scripts para quem prefere não passar pelos avisos de sistema operacional.
+	</p>
+
+	<div class="grid">
+		<div class="card">
+			<h3>⚡ Atualizar a instalação (Linux)</h3>
+			<p style="margin-bottom:14px">Baixa a última release, confere o SHA-256 publicado e troca o binário de forma atômica, guardando backup:</p>
+			<pre style="margin:0"><code>./update-local.sh
+./update-local.sh --check
+./update-local.sh --rollback</code></pre>
+		</div>
+
+		<div class="card">
+			<h3>🔨 Compilar na sua máquina</h3>
+			<p style="margin-bottom:14px">Gera um binário sem a marca de origem do download — abre sem SmartScreen (Windows) e sem quarentena (macOS). Custa ~1,3 GB de download:</p>
+			<pre style="margin:0"><code>./build-local.sh</code></pre>
+			<p class="note" style="margin-top:12px">No Windows: <code>.\build-local.ps1</code></p>
+		</div>
+	</div>
+
+	<div class="callout">
+		<strong>Qual escolher?</strong> Para a maioria dos casos, o pacote pronto acima é mais
+		simples e mais rápido. Compilar localmente é a alternativa a <em>assinar</em> o aplicativo:
+		num arquivo gerado na própria máquina não existe quarentena nem Mark-of-the-Web para
+		bloquear. Não é um teste de segurança — o projeto não é assinado.
+	</div>
+</section>
+
 </main>
 
 <footer class="wrap">

@@ -80,7 +80,9 @@ const normalizeRelease = (payload, { currentVersion, platform }) => {
 // Consulta a última release. Nunca lança: falha vira { status: "error" } para
 // não atrapalhar a inicialização do app (offline, rate limit, proxy, etc.).
 const checkForUpdate = async ({ currentVersion, platform = process.platform, fetchImpl, timeoutMs = RELEASES_TIMEOUT_MS } = {}) => {
-	const doFetch = fetchImpl || globalThis.fetch;
+	// fetchImpl ausente usa o fetch global; fetchImpl null significa
+	// "explicitamente indisponível" (útil para testar e para ambientes sem fetch).
+	const doFetch = fetchImpl === undefined ? globalThis.fetch : fetchImpl;
 	if (typeof doFetch !== "function") {
 		return { status: "error", reason: "fetch-unavailable", currentVersion: String(currentVersion) };
 	}

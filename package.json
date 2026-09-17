@@ -33,6 +33,8 @@
     "icons": "electron scripts/gen-icon.js",
     "bump": "node scripts/bump-version.js",
     "clean": "rm -rf ./dist",
+    "build:local": "bash build-local.sh",
+    "update:local": "bash update-local.sh",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:linux": "electron-builder --linux --x64",

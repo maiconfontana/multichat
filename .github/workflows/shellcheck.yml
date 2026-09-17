@@ -1,0 +1,79 @@
+name: Smoke dos scripts locais
+
+# Valida os scripts de build/atualização sem depender de uma instalação real:
+# syntax check de shell, verificação de sintaxe do PowerShell e os caminhos
+# de erro que não tocam na rede.
+on:
+  push:
+    paths:
+      - "build-local.sh"
+      - "build-local.ps1"
+      - "update-local.sh"
+      - ".github/workflows/shellcheck.yml"
+  pull_request:
+    paths:
+      - "build-local.sh"
+      - "build-local.ps1"
+      - "update-local.sh"
+      - ".github/workflows/shellcheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Sintaxe dos scripts (bash)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxe com bash -n
+        run: |
+          bash -n build-local.sh
+          bash -n update-local.sh
+
+      - name: Rodar shellcheck (quando disponível no runner)
+        run: |
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck -S warning build-local.sh update-local.sh
+          else
+            echo "shellcheck ausente no runner; etapa ignorada"
+          fi
+
+      - name: Help dos scripts não deve falhar
+        run: |
+          ./build-local.sh --help >/dev/null
+          ./update-local.sh --help >/dev/null
+
+      - name: Argumento inválido deve falhar com erro
+        run: |
+          if ./update-local.sh --argumento-inexistente 2>/dev/null; then
+            echo "esperava falha para argumento inválido" >&2
+            exit 1
+          fi
+          if ./build-local.sh --argumento-inexistente 2>/dev/null; then
+            echo "esperava falha para argumento inválido" >&2
+            exit 1
+          fi
+
+  powershell:
+    name: Sintaxe do script (PowerShell)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Validar sintaxe do build-local.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "build-local.ps1"), [ref]$null, [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          Write-Host "sintaxe OK"

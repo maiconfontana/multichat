@@ -63,6 +63,43 @@ continua sendo sua decisão, nada é baixado nem instalado automaticamente.
 A comparação de versões (`src/update-check.js`) é um módulo puro, coberto por testes em
 `test/update-check.test.js`.
 
+### Atualizar a instalação local (Linux)
+
+Se você instalou o MultiChat em `~/.local/bin/multichat`, o script `update-local.sh`
+baixa a última release, **confere o SHA-256** contra o `SHA256SUMS.txt` publicado e troca
+o binário de forma atômica, guardando backup da versão anterior:
+
+```bash
+./update-local.sh              # verifica e atualiza
+./update-local.sh --check      # só informa se há versão nova (exit 10 quando há)
+./update-local.sh --yes        # sem confirmação (para scripts/cron)
+./update-local.sh --rollback   # volta para o backup mais recente
+```
+
+Sem escolher nada, ele usa a release mais recente; `--version 1.6.0` fixa uma versão.
+Também disponível como `npm run update:local`.
+
+## Compilar localmente (sem baixar o instalador)
+
+Compilar na própria máquina gera um binário que **não carrega a marca de origem do
+download**, então ele abre sem o aviso do SmartScreen (Windows) e sem a quarentena
+do Gatekeeper (macOS) — é a alternativa a assinar o aplicativo.
+
+O custo é o download das dependências e do Electron (~1,3 GB) e alguns minutos de build:
+
+```bash
+./build-local.sh          # Linux e macOS: instala deps e gera o pacote da plataforma
+./build-local.sh --dir    # só empacota, sem instalador (mais rápido)
+npm run build:local       # equivalente
+```
+
+No Windows, use o PowerShell (`.\build-local.ps1`; veja o cabeçalho do arquivo para as
+opções). Os dois scripts checam a versão do Node antes de começar.
+
+> Isto é um caminho **opcional** para quem prefere não liberar manualmente um app
+> baixado. Para a maioria dos casos, o pacote pronto da página de downloads é mais
+> simples e mais rápido.
+
 ---
 
 ## Funcionalidades
