@@ -1,0 +1,83 @@
+name: Sugerir recurso
+description: Proponha uma melhoria ou um recurso novo para o MultiChat
+title: "[Recurso]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de abrir, dê uma olhada nas issues existentes — pode haver algo parecido em discussão.
+        Descreva **o problema** com prioridade sobre a solução: entender o problema costuma abrir
+        caminhos melhores do que a primeira ideia de implementação.
+
+        Tenha em mente o escopo do projeto: o MultiChat é um wrapper de mensageiros web em Electron
+        que mantém `contextIsolation` e `sandbox` ativos e os recursos de interface servidos localmente,
+        sem CDN. Veja o [guia de contribuição](https://github.com/maiconfontana/multichat/blob/main/CONTRIBUTING.md).
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Verificações iniciais
+      options:
+        - label: Procurei nas issues existentes e não encontrei esta sugestão
+          required: true
+        - label: Esta sugestão respeita os [termos de uso](https://github.com/maiconfontana/multichat/blob/main/CONTRIBUTING.md#escopo-do-projeto) do projeto
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isto resolve?
+      description: Descreva a dificuldade que você tem hoje. Evite começar pela implementação.
+      placeholder: Quando tenho mais de seis contas abertas, a sidebar fica longa e fica difícil achar a conta certa.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solução proposta
+      description: Como você imagina que isso funcionaria na interface?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Outras formas de resolver o mesmo problema, e o que você descartou.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área do aplicativo
+      options:
+        - Contas e sidebar
+        - Notificações e contador de não lidas
+        - Bandeja do sistema (tray)
+        - Assistente contextual
+        - Compartilhamento de tela
+        - Memória e suspensão de contas
+        - Build, empacotamento e releases
+        - Documentação
+        - Outra
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Contexto adicional
+      description: Capturas, links de referência, comportamento em outros aplicativos.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Disposição para contribuir
+      options:
+        - label: Posso abrir um pull request para implementar isto (com orientação de escopo)
+          required: false

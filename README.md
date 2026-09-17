@@ -1,5 +1,10 @@
 # MultiChat
 
+[![CI](https://github.com/maiconfontana/multichat/actions/workflows/ci.yml/badge.svg)](https://github.com/maiconfontana/multichat/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/maiconfontana/multichat)](https://github.com/maiconfontana/multichat/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+
 Cliente desktop **multi-conta** para mensageiros web, construído em [Electron](https://www.electron.dev/).
 
 Use WhatsApp, Microsoft Teams, Telegram, Discord, Slack (ou qualquer URL personalizada) em contas separadas dentro de um único aplicativo, com sidebar, notificações do sistema e contador de mensagens não lidas.
@@ -126,6 +131,23 @@ Os pacotes saem na pasta `dist/`.
 └── package.json              # metadata + config do electron-builder
 ```
 
+## Contribuindo
+
+Contribuições são muito bem-vindas — código, documentação, tradução ou apenas um relato de bug.
+
+- Leia o [**guia de contribuição**](CONTRIBUTING.md) antes de abrir um pull request: ele traz o
+  padrão de commits ([Conventional Commits](https://www.conventionalcommits.org/pt-br/)),
+  o fluxo de branches, o que é esperado de um PR e o que está fora do escopo do projeto.
+- [Abra uma issue](https://github.com/maiconfontana/multichat/issues/new/choose) para bugs e sugestões.
+- O projeto segue o [Contributor Covenant 2.1](CODE_OF_CONDUCT.md).
+
+### Segurança
+
+**Não relate vulnerabilidades em issues públicas.** Use o canal privado
+(*Report a vulnerability* na aba Security) descrito na [Política de Segurança](SECURITY.md).
+
 ## Licença
 
-[MIT](LICENSE)
+[MIT](LICENSE). Projeto derivado de [whatsapp-electron](https://github.com/dagmoller/whatsapp-electron)
+(fork de [SingleBox](https://github.com/hmami252/whatsapp-desktop-app)) — os créditos de autoria
+dos projetos originais são mantidos.

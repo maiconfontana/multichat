@@ -3,13 +3,27 @@
   "desktopName": "multichat",
   "version": "1.5.0",
   "description": "MultiChat — Multi-account messenger desktop app",
-  "author": "Diego Aguirre (DagMoller) — local fork",
+  "author": "Maicon Fontana",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maiconfontana/multichat.git"
+  },
+  "homepage": "https://github.com/maiconfontana/multichat#readme",
+  "bugs": {
+    "url": "https://github.com/maiconfontana/multichat/issues"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/maiconfontana"
+  },
   "keywords": [
     "multichat",
     "electron",
     "multi-account",
-    "messenger"
+    "whatsapp",
+    "messenger",
+    "desktop-app"
   ],
   "main": "./src/main.js",
   "scripts": {
