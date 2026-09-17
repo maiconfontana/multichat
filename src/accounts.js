@@ -73,6 +73,96 @@ const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+let contextMenuAcct = null;
+let contextMenuToken = 0;
+
+const ensureSidebarExpanded = () => {
+	if (document.body.classList.contains("collapsed"))
+		window.electron.toggleSidebar();
+};
+
+const openEditAccount = (acct) => {
+	ensureSidebarExpanded();
+	$("#acct-action").value = "edit";
+	$("#acct-id").value = acct.id;
+	$("#acct-name").value = acct.name;
+	$("#acct-type").value = acct.type || "custom";
+	$("#acct-url").value = acct.url || "";
+	$("#acct-notif-switch").checked = acct.notifOn !== false;
+	fillSuspendFields(acct.suspend);
+	updateUrlVisibility(acct.type || "custom");
+	$("#accountModalLabel").textContent = "Editar conta";
+	bootstrap.Modal.getOrCreateInstance("#accountModal").show();
+	$("#acct-name").focus();
+	$("#acct-name").select();
+};
+
+const openDeleteAccount = (acct) => {
+	ensureSidebarExpanded();
+	$("#acct-account-remove-name").textContent = acct.name;
+	$("#acct-delete-button").dataset.acctId = acct.id;
+	bootstrap.Modal.getOrCreateInstance("#deleteModal").show();
+};
+
+const closeContextMenu = async () => {
+	const menu = $("#acct-context-menu");
+	if (!menu || menu.hidden) return;
+	contextMenuToken += 1;
+	menu.hidden = true;
+	menu.style.visibility = "";
+	const backdrop = $("#acct-ctx-backdrop");
+	if (backdrop) backdrop.hidden = true;
+	contextMenuAcct = null;
+	if (window.electron?.setSidebarContextOverlay)
+		await window.electron.setSidebarContextOverlay(false);
+};
+
+const positionContextMenu = (event, itemEl) => {
+	const menu = $("#acct-context-menu");
+	const collapsed = document.body.classList.contains("collapsed");
+	const itemRect = itemEl.getBoundingClientRect();
+	const mw = menu.offsetWidth;
+	const mh = menu.offsetHeight;
+	const vw = window.innerWidth;
+	const vh = window.innerHeight;
+	let left = collapsed ? Math.round(itemRect.right + 8) : event.clientX;
+	let top = collapsed ? Math.round(itemRect.top) : event.clientY;
+	if (left + mw > vw - 8) left = Math.max(8, vw - mw - 8);
+	if (top + mh > vh - 8) top = Math.max(8, vh - mh - 8);
+	if (left < 8) left = 8;
+	if (top < 8) top = 8;
+	menu.style.left = `${left}px`;
+	menu.style.top = `${top}px`;
+};
+
+const showContextMenu = async (event, itemEl, acct) => {
+	event.preventDefault();
+	event.stopPropagation();
+	const token = ++contextMenuToken;
+	contextMenuAcct = acct;
+	const menu = $("#acct-context-menu");
+	const notifBtn = menu.querySelector('[data-action="notif"]');
+	notifBtn.querySelector("i").className = acct.notifOn ? "bi bi-bell-slash" : "bi bi-bell";
+	notifBtn.querySelector("span").textContent = acct.notifOn ? "Desligar notificações" : "Ligar notificações";
+	const removeBtn = menu.querySelector('[data-action="remove"]');
+	removeBtn.disabled = $$(".acct-item").length <= 1;
+	removeBtn.title = removeBtn.disabled ? "Mantenha ao menos uma conta" : "";
+
+	menu.hidden = false;
+	menu.style.visibility = "hidden";
+	menu.style.left = "0px";
+	menu.style.top = "0px";
+	const backdrop = $("#acct-ctx-backdrop");
+	if (backdrop) backdrop.hidden = false;
+	if (window.electron?.setSidebarContextOverlay)
+		await window.electron.setSidebarContextOverlay(true);
+	if (token !== contextMenuToken) return;
+	positionContextMenu(event, itemEl);
+	menu.style.visibility = "visible";
+	const focusable = menu.querySelector(".acct-ctx-item:not(:disabled)");
+	if (focusable) focusable.focus();
+};
+
 const ACCOUNT_TEMPLATE = `
 	<div class="acct-avatar-wrap">
 		<div class="acct-avatar" style="background:__COLOR__">__ICON__</div>
@@ -91,12 +181,13 @@ const ACCOUNT_TEMPLATE = `
 			<i class="bi __NOTIF_ICON__"></i>
 		</button>
 		<button type="button" class="acct-edit" title="Editar"><i class="bi bi-pencil"></i></button>
-		<button type="button" class="acct-del" title="Remover"><i class="bi bi-person-x"></i></button>
+		<button type="button" class="acct-del" title="Remover"><i class="bi bi-trash3"></i></button>
 	</div>`;
 
 const fmtUnread = (n) => n > 99 ? '99+' : String(n);
 
 const renderList = (accounts) => {
+	closeContextMenu();
 	if (drag) {
 		drag.el.classList.remove("is-dragging");
 		drag = null;
@@ -117,6 +208,7 @@ const renderList = (accounts) => {
 		const el = document.createElement("div");
 		el.className = "acct-item" + (isActive ? " active" : "");
 		el.dataset.id = acct.id;
+		el.title = acct.name;
 		el.innerHTML = ACCOUNT_TEMPLATE
 			.replace(/__COLOR__/g, color)
 			.replace(/__ICON__/g, icon)
@@ -149,6 +241,17 @@ const renderList = (accounts) => {
 			if (acct.id !== activeId) window.electron.gotoAccount(acct.id);
 		});
 
+		el.addEventListener("contextmenu", (e) => {
+			showContextMenu(e, el, {
+				id: acct.id,
+				name: acct.name,
+				type: acct.type || "custom",
+				url: acct.url || "",
+				notifOn,
+				suspend: acct.suspend
+			});
+		});
+
 		notifBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			const enabled = e.currentTarget.dataset.enabled === "true";
@@ -157,28 +260,58 @@ const renderList = (accounts) => {
 
 		el.querySelector(".acct-edit").addEventListener("click", (e) => {
 			e.stopPropagation();
-			$("#acct-action").value = "edit";
-			$("#acct-id").value = acct.id;
-			$("#acct-name").value = acct.name;
-			$("#acct-type").value = acct.type || "custom";
-			$("#acct-url").value = acct.url || "";
-			$("#acct-notif-switch").checked = notifOn;
-			updateUrlVisibility(acct.type || "custom");
-			$("#accountModalLabel").textContent = "Editar conta";
-			bootstrap.Modal.getOrCreateInstance("#accountModal").show();
-			$("#acct-name").focus();
-			$("#acct-name").select();
+			openEditAccount({
+				id: acct.id,
+				name: acct.name,
+				type: acct.type || "custom",
+				url: acct.url || "",
+				notifOn,
+				suspend: acct.suspend
+			});
 		});
 
 		el.querySelector(".acct-del").addEventListener("click", (e) => {
 			e.stopPropagation();
-			$("#acct-account-remove-name").textContent = acct.name;
-			$("#acct-delete-button").dataset.acctId = acct.id;
-			bootstrap.Modal.getOrCreateInstance("#deleteModal").show();
+			openDeleteAccount({ id: acct.id, name: acct.name });
 		});
 
 		list.appendChild(el);
 	}
+};
+
+const SUSPEND_MINUTES_DEFAULT = 60;
+const SUSPEND_MINUTES_MIN = 1;
+const SUSPEND_MINUTES_MAX = 1440;
+
+const updateSuspendVisibility = () => {
+	const on = $("#acct-suspend-switch").checked;
+	$("#suspend-group").style.display = on ? "block" : "none";
+	$("#acct-suspend-minutes").required = on;
+	if (!on) $("#suspend-minutes-feedback").style.display = "none";
+};
+
+const fillSuspendFields = (suspend) => {
+	const enabled = !suspend || suspend.enabled !== false;
+	const minutes = Number(suspend && suspend.afterMinutes);
+	$("#acct-suspend-switch").checked = enabled;
+	$("#acct-suspend-minutes").value = Number.isFinite(minutes) && minutes >= SUSPEND_MINUTES_MIN
+		? String(Math.min(SUSPEND_MINUTES_MAX, Math.round(minutes)))
+		: String(SUSPEND_MINUTES_DEFAULT);
+	updateSuspendVisibility();
+};
+
+const readSuspendFields = () => {
+	const enabled = $("#acct-suspend-switch").checked;
+	let afterMinutes = Number($("#acct-suspend-minutes").value);
+	if (enabled && (!Number.isFinite(afterMinutes) || afterMinutes < SUSPEND_MINUTES_MIN || afterMinutes > SUSPEND_MINUTES_MAX)) {
+		$("#suspend-minutes-feedback").style.display = "block";
+		$("#acct-suspend-minutes").focus();
+		return null;
+	}
+	$("#suspend-minutes-feedback").style.display = "none";
+	if (!Number.isFinite(afterMinutes) || afterMinutes < SUSPEND_MINUTES_MIN || afterMinutes > SUSPEND_MINUTES_MAX)
+		afterMinutes = SUSPEND_MINUTES_DEFAULT;
+	return { enabled, afterMinutes: Math.round(afterMinutes) };
 };
 
 const updateUrlVisibility = (type) => {
@@ -197,6 +330,11 @@ $("#acct-type").addEventListener("change", function () {
 	updateUrlVisibility(this.value);
 });
 
+$("#acct-suspend-switch").addEventListener("change", updateSuspendVisibility);
+$("#acct-suspend-minutes").addEventListener("input", () => {
+	$("#suspend-minutes-feedback").style.display = "none";
+});
+
 const updateUnreadUI = (id, unread) => {
 	for (const badge of $$(`[data-unread="${CSS.escape(id)}"], [data-unread-badge="${CSS.escape(id)}"]`)) {
 		badge.textContent = fmtUnread(unread);
@@ -211,10 +349,17 @@ const setActiveUI = (id) => {
 	if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
 };
 
+const setThemeUI = (dark) => {
+	document.body.classList.toggle("theme-dark", !!dark);
+};
+
 const setCollapsedUI = (collapsed) => {
-	document.body.classList.toggle("collapsed", !!collapsed);
-	$("#btn-toggle-sidebar i").className = collapsed ? "bi bi-list" : "bi bi-layout-sidebar";
-	$("#btn-toggle-sidebar").title = collapsed ? "Expandir sidebar" : "Recolher sidebar";
+	const next = !!collapsed;
+	const changed = document.body.classList.contains("collapsed") !== next;
+	document.body.classList.toggle("collapsed", next);
+	$("#btn-toggle-sidebar i").className = next ? "bi bi-list" : "bi bi-layout-sidebar";
+	$("#btn-toggle-sidebar").title = next ? "Expandir sidebar" : "Recolher sidebar";
+	if (changed) closeContextMenu();
 };
 
 const init = async () => {
@@ -235,6 +380,9 @@ const init = async () => {
 	});
 
 	window.electron.onSidebarState(setCollapsedUI);
+	window.electron.onUiTheme(setThemeUI);
+	if (window.electron.getUiTheme)
+		window.electron.getUiTheme().then(setThemeUI);
 };
 
 init();
@@ -267,14 +415,15 @@ $("#btn-toggle-sidebar").addEventListener("click", () => {
 
 // Botão Adicionar (+) — expande a sidebar se estiver recolhida, para o modal caber
 $("#btn-add").addEventListener("click", () => {
-	if (document.body.classList.contains("collapsed"))
-		window.electron.toggleSidebar();
+	closeContextMenu();
+	ensureSidebarExpanded();
 	$("#acct-action").value = "new";
 	$("#acct-id").value = "";
 	$("#acct-name").value = "";
 	$("#acct-type").value = "whatsapp";
 	$("#acct-url").value = "";
 	$("#acct-notif-switch").checked = true;
+	fillSuspendFields({ enabled: true, afterMinutes: SUSPEND_MINUTES_DEFAULT });
 	updateUrlVisibility("whatsapp");
 	$("#accountModalLabel").textContent = "Nova conta / mensageiro";
 	bootstrap.Modal.getOrCreateInstance("#accountModal").show();
@@ -287,10 +436,13 @@ const saveAccount = () => {
 	const type = $("#acct-type").value;
 	const url = $("#acct-url").value.trim();
 	const notifEnabled = $("#acct-notif-switch").checked;
+	const suspend = readSuspendFields();
 
 	if (!name) { $(".invalid-feedback").style.display = "block"; return; }
 	if (type === "custom" && !url) { alert("Por favor informe a URL para o serviço personalizado."); return; }
+	if (!suspend) return;
 	$(".invalid-feedback").style.display = "none";
+	$("#suspend-minutes-feedback").style.display = "none";
 
 	if ($("#acct-action").value === "new") {
 		window.electron.addAccount({
@@ -298,7 +450,8 @@ const saveAccount = () => {
 			name: name,
 			type: type,
 			url: type === "custom" ? url : undefined,
-			notifications: { enabled: notifEnabled }
+			notifications: { enabled: notifEnabled },
+			suspend
 		});
 	} else {
 		window.electron.updateAccount({
@@ -306,7 +459,8 @@ const saveAccount = () => {
 			name: name,
 			type: type,
 			url: type === "custom" ? url : undefined,
-			notifications: { enabled: notifEnabled }
+			notifications: { enabled: notifEnabled },
+			suspend
 		});
 	}
 
@@ -317,9 +471,67 @@ $("#accountModal").querySelector(".acct-save").addEventListener("click", saveAcc
 
 $("#acct-name").addEventListener("keypress", (e) => { if (e.key === "Enter") saveAccount(); });
 $("#acct-url").addEventListener("keypress", (e) => { if (e.key === "Enter") saveAccount(); });
+$("#acct-suspend-minutes").addEventListener("keypress", (e) => { if (e.key === "Enter") saveAccount(); });
 
 $("#acct-delete-button").addEventListener("click", () => {
 	const id = $("#acct-delete-button").dataset.acctId;
 	bootstrap.Modal.getInstance("#deleteModal").hide();
 	window.electron.deleteAccount(id);
 });
+
+$("#acct-context-menu").addEventListener("click", (e) => {
+	const btn = e.target.closest("[data-action]");
+	if (!btn || btn.disabled || !contextMenuAcct) return;
+	const acct = contextMenuAcct;
+	const action = btn.dataset.action;
+	closeContextMenu().then(() => {
+		if (action === "edit") openEditAccount(acct);
+		else if (action === "notif") window.electron.toggleNotifications(acct.id, !acct.notifOn);
+		else if (action === "remove") openDeleteAccount(acct);
+	});
+});
+
+$("#acct-context-menu").addEventListener("contextmenu", (e) => e.preventDefault());
+
+document.addEventListener("contextmenu", (e) => {
+	if (!e.target.closest(".acct-item")) e.preventDefault();
+});
+
+document.addEventListener("pointerdown", (e) => {
+	const menu = $("#acct-context-menu");
+	if (!menu || menu.hidden) return;
+	if (menu.contains(e.target)) return;
+	if (e.button === 2 && e.target.closest(".acct-item")) return;
+	closeContextMenu();
+});
+
+$("#acct-ctx-backdrop").addEventListener("pointerdown", (e) => {
+	e.preventDefault();
+	closeContextMenu();
+});
+
+document.addEventListener("keydown", (e) => {
+	const menu = $("#acct-context-menu");
+	if (!menu || menu.hidden) return;
+	const items = $$(".acct-ctx-item:not(:disabled)");
+	const idx = items.indexOf(document.activeElement);
+	if (e.key === "Escape") {
+		e.preventDefault();
+		closeContextMenu();
+	} else if (e.key === "ArrowDown") {
+		e.preventDefault();
+		items[(idx + 1) % items.length]?.focus();
+	} else if (e.key === "ArrowUp") {
+		e.preventDefault();
+		items[(idx - 1 + items.length) % items.length]?.focus();
+	} else if (e.key === "Home") {
+		e.preventDefault();
+		items[0]?.focus();
+	} else if (e.key === "End") {
+		e.preventDefault();
+		items[items.length - 1]?.focus();
+	}
+});
+
+$("#sb-list").addEventListener("scroll", () => closeContextMenu());
+window.addEventListener("blur", () => closeContextMenu());
