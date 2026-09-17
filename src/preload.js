@@ -5,34 +5,46 @@ let Constants = null;
 // Caminho RELATIVO (o renderer já é servido de dentro do app): evita
 // require('path'), proibido em preload sandboxed (module not found: path).
 const BADGE_ICON_SRC = "../assets/icon-32.png";
+const MAC_TRAY_SRC = "../assets/trayTemplate@2x.png";
+const MAC_TRAY_PX = 44;
 
 // Desenha o badge do tray (contador sobre o logo) e devolve um dataURL.
-// A fonte e o círculo escalam com o tamanho real do ícone (em vez de fixo
-// em 512px), e o contador é limitado a 999+ para não transbordar.
-const buildBadgeIcon = (counter) => {
+// No macOS o canvas é 44px (@2x de 22pt) sobre o ícone template; no resto
+// das plataformas continua o logo colorido de 32px. O contador é limitado
+// a 999+ para não transbordar.
+const buildBadgeIcon = (payload) => {
+	const counter = (payload && typeof payload === "object") ? payload.counter : payload;
+	const dark = !!(payload && typeof payload === "object" && payload.dark);
+	const isMac = process.platform === "darwin";
 	const label = counter > 999 ? '999+' : String(counter);
 	const image = new Image();
 	image.onload = () => {
-		const size = image.width || 32;
+		const size = isMac ? MAC_TRAY_PX : (image.width || 32);
 		var canvas = document.createElement("canvas");
 		var ctx = canvas.getContext("2d");
 		canvas.width = size;
 		canvas.height = size;
-		ctx.drawImage(image, 0, 0, size, size);
 
-		const radius = Math.max(8, size * 0.40);
-		const centerX = (size * .75) - (size * .02);
-		const centerY = (size * .25) + (size * .02);
+		if (isMac && dark)
+			ctx.filter = "invert(1)";
+		ctx.drawImage(image, 0, 0, size, size);
+		ctx.filter = "none";
+
+		const radius = isMac ? Math.max(7, size * 0.22) : Math.max(8, size * 0.40);
+		const centerX = size * (isMac ? 0.78 : 0.73);
+		const centerY = size * (isMac ? 0.22 : 0.27);
 		ctx.beginPath();
 		ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-		ctx.fillStyle = '#ff3333';
+		ctx.fillStyle = isMac ? '#ff3b30' : '#ff3333';
 		ctx.fill();
-		ctx.lineWidth = Math.max(1, size / 16);
-		ctx.strokeStyle = '#003300';
-		ctx.stroke();
+		if (!isMac) {
+			ctx.lineWidth = Math.max(1, size / 16);
+			ctx.strokeStyle = '#003300';
+			ctx.stroke();
+		}
 
-		const fontSize = radius * (label.length >= 3 ? 0.95 : 1.25);
-		ctx.font = `bold ${Math.round(fontSize)}px Arial`;
+		const fontSize = radius * (label.length >= 3 ? 0.95 : (isMac ? 1.15 : 1.25));
+		ctx.font = `bold ${Math.round(fontSize)}px -apple-system, BlinkMacSystemFont, Arial`;
 		ctx.textAlign = 'center';
 		ctx.textBaseline = 'middle';
 		ctx.fillStyle = '#ffffff';
@@ -41,7 +53,7 @@ const buildBadgeIcon = (counter) => {
 		var data = canvas.toDataURL("image/png");
 		ipcRenderer.send(Constants.event.updateBadgeIcon, data);
 	};
-	image.src = BADGE_ICON_SRC;
+	image.src = isMac ? MAC_TRAY_SRC : BADGE_ICON_SRC;
 };
 
 // Recebe as constantes do main. Chega tanto no envio imediato (pós-loadFile)
@@ -51,7 +63,7 @@ ipcRenderer.on("init-resources", (event, data) => {
 	if (Constants) return; // idempotente
 	Constants = data.constants;
 	console.log("[sidebar] preload OK — API window.electron exposta");
-	ipcRenderer.on(Constants.event.buildBadgeIcon, (event, counter) => buildBadgeIcon(counter));
+	ipcRenderer.on(Constants.event.buildBadgeIcon, (event, payload) => buildBadgeIcon(payload));
 });
 
 contextBridge.exposeInMainWorld("electron", {
