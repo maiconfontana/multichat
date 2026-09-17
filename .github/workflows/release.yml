@@ -79,7 +79,7 @@ jobs:
           if-no-files-found: error
           path: |
             dist/MultiChat-*-setup.exe
-            dist/MultiChat-*-win.zip
+            dist/MultiChat-*-win-*.zip
 
   build-macos:
     name: Build macOS
@@ -141,7 +141,7 @@ jobs:
       - name: Gerar checksums SHA-256
         run: |
           cd dist
-          sha256sum MultiChat-* *.tar.xz > SHA256SUMS.txt || true
+          sha256sum MultiChat-* > SHA256SUMS.txt || true
           cat SHA256SUMS.txt
 
       - name: Criar GitHub Release
@@ -154,7 +154,7 @@ jobs:
             dist/MultiChat-*.AppImage
             dist/*.tar.xz
             dist/MultiChat-*-setup.exe
-            dist/MultiChat-*-win.zip
+            dist/MultiChat-*-win-*.zip
             dist/MultiChat-*.dmg
             dist/MultiChat-*-mac*.zip
             dist/SHA256SUMS.txt
