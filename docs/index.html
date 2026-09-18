@@ -596,27 +596,27 @@
 		<div class="compat-row">
 			<dt>Windows</dt>
 			<dd>O instalador não tem certificado de assinatura de código, então o SmartScreen mostra o aviso na primeira execução. Depois de confirmar <em>Mais informações → Executar assim mesmo</em>, o app abre normalmente e o aviso não volta em atualizações instaladas por cima.</dd>
-			<span class="v-tag v-warn">sem assinatura</span>
+			<dd><span class="v-tag v-warn">sem assinatura</span></dd>
 		</div>
 		<div class="compat-row">
 			<dt>macOS</dt>
 			<dd>Precisa da liberação manual descrita na seção de downloads. Assinatura e notarização exigem o Apple Developer Program (US$ 99/ano) — não há caminho gratuito. Quem prefere evitar os dois avisos pode compilar na própria máquina.</dd>
-			<span class="v-tag v-warn">sem notarização</span>
+			<dd><span class="v-tag v-warn">sem notarização</span></dd>
 		</div>
 		<div class="compat-row">
 			<dt>Linux</dt>
 			<dd>AppImage e <code>tar.xz</code> 64 bits, distribuídos direto pelo GitHub Releases. Ainda não há repositório APT, Flatpak nem Snap — o <code>update-local.sh</code> cobre a atualização pela linha de comando.</dd>
-			<span class="v-tag v-info">sem pacote de distro</span>
+			<dd><span class="v-tag v-info">sem pacote de distro</span></dd>
 		</div>
 		<div class="compat-row">
 			<dt>Mudanças no site</dt>
 			<dd>A barra lateral e o contador de não lidas leem o DOM do mensageiro. Quando o WhatsApp Web muda a estrutura, esses contadores podem parar até o próximo ajuste — o envio de mensagens nunca dependeu disso e continua funcionando.</dd>
-			<span class="v-tag v-info">acoplado ao HTML</span>
+			<dd><span class="v-tag v-info">acoplado ao HTML</span></dd>
 		</div>
 		<div class="compat-row">
 			<dt>Tela branca ao trocar de conta</dt>
 			<dd>Já aconteceu de verdade: uma refatoração removeu uma linha e a view de conta hibernada sumia ao voltar. Voltou no <code>v1.6.0</code> e ganhou teste de regressão. Se você vir isso numa versão antiga, atualize.</dd>
-			<span class="v-tag v-ok">corrigido</span>
+			<dd><span class="v-tag v-ok">corrigido</span></dd>
 		</div>
 	</dl>
 </section>
