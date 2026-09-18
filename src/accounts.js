@@ -74,15 +74,63 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 let contextMenuAcct = null;
+const HIBERNATE_HINTS = {
+	already: "Esta conta já está hibernada",
+	"only-visible": "Abra outra conta para hibernar esta"
+};
+const hibernateNowState = ({ loaded = false, isActive = false, otherCount = 0 } = {}) => {
+	if (!loaded) return { enabled: false, reason: "already" };
+	if (isActive && otherCount < 1) return { enabled: false, reason: "only-visible" };
+	return { enabled: true, reason: null };
+};
 let contextMenuToken = 0;
+let pendingModal = false;
+let modalAnchorRect = null;
 
-const ensureSidebarExpanded = () => {
-	if (document.body.classList.contains("collapsed"))
-		window.electron.toggleSidebar();
+const overlayNeeded = () => {
+	const menu = $("#acct-context-menu");
+	const menuOpen = !!(menu && !menu.hidden);
+	const modalOpen = pendingModal
+		|| $("#accountModal")?.classList.contains("show")
+		|| $("#deleteModal")?.classList.contains("show");
+	return menuOpen || (modalOpen && document.body.classList.contains("collapsed"));
 };
 
-const openEditAccount = (acct) => {
-	ensureSidebarExpanded();
+const syncOverlay = async () => {
+	if (window.electron?.setSidebarContextOverlay)
+		await window.electron.setSidebarContextOverlay(overlayNeeded());
+};
+
+const positionFloatingDialog = (selector) => {
+	const dialog = $(selector)?.querySelector(".modal-dialog");
+	if (!dialog) return;
+	if (!document.body.classList.contains("collapsed")) {
+		dialog.style.left = "";
+		dialog.style.top = "";
+		return;
+	}
+	const sbw = Math.round($("#sb-root")?.getBoundingClientRect().width || 72);
+	const mw = dialog.offsetWidth || 280;
+	const mh = dialog.offsetHeight || 0;
+	const vw = window.innerWidth;
+	const vh = window.innerHeight;
+	let left = sbw + 8;
+	let top = modalAnchorRect ? Math.round(modalAnchorRect.top) : 12;
+	if (left + mw > vw - 8) left = Math.max(8, vw - mw - 8);
+	if (mh && top + mh > vh - 12) top = Math.max(12, vh - mh - 12);
+	if (top < 12) top = 12;
+	dialog.style.left = `${left}px`;
+	dialog.style.top = `${top}px`;
+};
+
+const showSidebarModal = async (selector) => {
+	pendingModal = true;
+	await syncOverlay();
+	bootstrap.Modal.getOrCreateInstance(selector).show();
+	positionFloatingDialog(selector);
+};
+
+const openEditAccount = async (acct) => {
 	$("#acct-action").value = "edit";
 	$("#acct-id").value = acct.id;
 	$("#acct-name").value = acct.name;
@@ -92,16 +140,15 @@ const openEditAccount = (acct) => {
 	fillSuspendFields(acct.suspend);
 	updateUrlVisibility(acct.type || "custom");
 	$("#accountModalLabel").textContent = "Editar conta";
-	bootstrap.Modal.getOrCreateInstance("#accountModal").show();
+	await showSidebarModal("#accountModal");
 	$("#acct-name").focus();
 	$("#acct-name").select();
 };
 
-const openDeleteAccount = (acct) => {
-	ensureSidebarExpanded();
+const openDeleteAccount = async (acct) => {
 	$("#acct-account-remove-name").textContent = acct.name;
 	$("#acct-delete-button").dataset.acctId = acct.id;
-	bootstrap.Modal.getOrCreateInstance("#deleteModal").show();
+	await showSidebarModal("#deleteModal");
 };
 
 const closeContextMenu = async () => {
@@ -113,8 +160,7 @@ const closeContextMenu = async () => {
 	const backdrop = $("#acct-ctx-backdrop");
 	if (backdrop) backdrop.hidden = true;
 	contextMenuAcct = null;
-	if (window.electron?.setSidebarContextOverlay)
-		await window.electron.setSidebarContextOverlay(false);
+	await syncOverlay();
 };
 
 const positionContextMenu = (event, itemEl) => {
@@ -140,10 +186,19 @@ const showContextMenu = async (event, itemEl, acct) => {
 	event.stopPropagation();
 	const token = ++contextMenuToken;
 	contextMenuAcct = acct;
+	modalAnchorRect = itemEl.getBoundingClientRect();
 	const menu = $("#acct-context-menu");
 	const notifBtn = menu.querySelector('[data-action="notif"]');
 	notifBtn.querySelector("i").className = acct.notifOn ? "bi bi-bell-slash" : "bi bi-bell";
 	notifBtn.querySelector("span").textContent = acct.notifOn ? "Desligar notificações" : "Ligar notificações";
+	const hibernateBtn = menu.querySelector('[data-action="hibernate"]');
+	const hibernate = hibernateNowState({
+		loaded: !!acct.loaded,
+		isActive: acct.id === activeId,
+		otherCount: Math.max(0, $$(".acct-item").length - 1)
+	});
+	hibernateBtn.disabled = !hibernate.enabled;
+	hibernateBtn.title = hibernate.enabled ? "Descarrega esta conta da memória agora" : (HIBERNATE_HINTS[hibernate.reason] || "");
 	const removeBtn = menu.querySelector('[data-action="remove"]');
 	removeBtn.disabled = $$(".acct-item").length <= 1;
 	removeBtn.title = removeBtn.disabled ? "Mantenha ao menos uma conta" : "";
@@ -154,8 +209,7 @@ const showContextMenu = async (event, itemEl, acct) => {
 	menu.style.top = "0px";
 	const backdrop = $("#acct-ctx-backdrop");
 	if (backdrop) backdrop.hidden = false;
-	if (window.electron?.setSidebarContextOverlay)
-		await window.electron.setSidebarContextOverlay(true);
+	await syncOverlay();
 	if (token !== contextMenuToken) return;
 	positionContextMenu(event, itemEl);
 	menu.style.visibility = "visible";
@@ -248,7 +302,8 @@ const renderList = (accounts) => {
 				type: acct.type || "custom",
 				url: acct.url || "",
 				notifOn,
-				suspend: acct.suspend
+				suspend: acct.suspend,
+				loaded: !!acct.loaded
 			});
 		});
 
@@ -260,6 +315,7 @@ const renderList = (accounts) => {
 
 		el.querySelector(".acct-edit").addEventListener("click", (e) => {
 			e.stopPropagation();
+			modalAnchorRect = el.getBoundingClientRect();
 			openEditAccount({
 				id: acct.id,
 				name: acct.name,
@@ -272,6 +328,7 @@ const renderList = (accounts) => {
 
 		el.querySelector(".acct-del").addEventListener("click", (e) => {
 			e.stopPropagation();
+			modalAnchorRect = el.getBoundingClientRect();
 			openDeleteAccount({ id: acct.id, name: acct.name });
 		});
 
@@ -413,10 +470,10 @@ $("#btn-toggle-sidebar").addEventListener("click", () => {
 	window.electron.toggleSidebar();
 });
 
-// Botão Adicionar (+) — expande a sidebar se estiver recolhida, para o modal caber
-$("#btn-add").addEventListener("click", () => {
-	closeContextMenu();
-	ensureSidebarExpanded();
+$("#btn-add").addEventListener("click", async () => {
+	pendingModal = true;
+	modalAnchorRect = $("#btn-add").getBoundingClientRect();
+	await closeContextMenu();
 	$("#acct-action").value = "new";
 	$("#acct-id").value = "";
 	$("#acct-name").value = "";
@@ -426,7 +483,7 @@ $("#btn-add").addEventListener("click", () => {
 	fillSuspendFields({ enabled: true, afterMinutes: SUSPEND_MINUTES_DEFAULT });
 	updateUrlVisibility("whatsapp");
 	$("#accountModalLabel").textContent = "Nova conta / mensageiro";
-	bootstrap.Modal.getOrCreateInstance("#accountModal").show();
+	await showSidebarModal("#accountModal");
 	$("#acct-name").focus();
 });
 
@@ -479,14 +536,33 @@ $("#acct-delete-button").addEventListener("click", () => {
 	window.electron.deleteAccount(id);
 });
 
+["#accountModal", "#deleteModal"].forEach((sel) => {
+	$(sel).addEventListener("shown.bs.modal", () => {
+		pendingModal = false;
+		positionFloatingDialog(sel);
+	});
+	$(sel).addEventListener("hide.bs.modal", () => { pendingModal = true; });
+	$(sel).addEventListener("hidden.bs.modal", () => {
+		pendingModal = false;
+		const dialog = $(sel).querySelector(".modal-dialog");
+		if (dialog) {
+			dialog.style.left = "";
+			dialog.style.top = "";
+		}
+		syncOverlay();
+	});
+});
+
 $("#acct-context-menu").addEventListener("click", (e) => {
 	const btn = e.target.closest("[data-action]");
 	if (!btn || btn.disabled || !contextMenuAcct) return;
 	const acct = contextMenuAcct;
 	const action = btn.dataset.action;
+	pendingModal = action === "edit" || action === "remove";
 	closeContextMenu().then(() => {
 		if (action === "edit") openEditAccount(acct);
 		else if (action === "notif") window.electron.toggleNotifications(acct.id, !acct.notifOn);
+		else if (action === "hibernate") window.electron.suspendAccount(acct.id);
 		else if (action === "remove") openDeleteAccount(acct);
 	});
 });

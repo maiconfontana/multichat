@@ -9,7 +9,9 @@ const {
 	formatSuspendPolicy,
 	defaultAccountSuspend,
 	normalizeAccountSuspend,
-	getAccountSuspendAfterMs
+	getAccountSuspendAfterMs,
+	hibernateNowState,
+	pickAccountAfterHibernate
 } = require('../src/resource-policy');
 
 test('usa 60 minutos por padrão', () => {
@@ -56,4 +58,18 @@ test('converte a política da conta em milissegundos', () => {
 	assert.equal(getAccountSuspendAfterMs({ suspend: { enabled: false, afterMinutes: 30 } }, '60'), 0);
 	assert.equal(getAccountSuspendAfterMs({ suspend: { enabled: true, afterMinutes: 5 } }, '60'), 5 * 60 * 1000);
 	assert.equal(getAccountSuspendAfterMs({}, '0'), 0);
+});
+
+test('Hibernar agora só vale para conta carregada com outra para assumir a tela', () => {
+	assert.deepEqual(hibernateNowState({ loaded: false, isActive: false, otherCount: 2 }), { enabled: false, reason: 'already' });
+	assert.deepEqual(hibernateNowState({ loaded: true, isActive: true, otherCount: 0 }), { enabled: false, reason: 'only-visible' });
+	assert.deepEqual(hibernateNowState({ loaded: true, isActive: true, otherCount: 1 }), { enabled: true, reason: null });
+	assert.deepEqual(hibernateNowState({ loaded: true, isActive: false, otherCount: 0 }), { enabled: true, reason: null });
+});
+
+test('ao hibernar a conta visível, prefere outra já carregada', () => {
+	const accounts = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+	assert.equal(pickAccountAfterHibernate(accounts, 'a', id => id === 'c').id, 'c');
+	assert.equal(pickAccountAfterHibernate(accounts, 'a', () => false).id, 'b');
+	assert.equal(pickAccountAfterHibernate([{ id: 'a' }], 'a', () => true), null);
 });
