@@ -48,6 +48,18 @@ function getAccountSuspendAfterMs(account, envValue = process.env.MULTICHAT_SUSP
 	return policy.enabled ? Math.round(policy.afterMinutes * 60 * 1000) : 0;
 }
 
+function hibernateNowState({ loaded = false, isActive = false, otherCount = 0 } = {}) {
+	if (!loaded) return { enabled: false, reason: 'already' };
+	if (isActive && Number(otherCount) < 1) return { enabled: false, reason: 'only-visible' };
+	return { enabled: true, reason: null };
+}
+
+function pickAccountAfterHibernate(accounts, hibernateId, isLoaded = () => false) {
+	const others = (accounts || []).filter(account => account && account.id !== hibernateId);
+	if (others.length === 0) return null;
+	return others.find(account => isLoaded(account.id)) || others[0];
+}
+
 module.exports = {
 	DEFAULT_SUSPEND_MINUTES,
 	MAX_SUSPEND_MINUTES,
@@ -55,5 +67,7 @@ module.exports = {
 	formatSuspendPolicy,
 	defaultAccountSuspend,
 	normalizeAccountSuspend,
-	getAccountSuspendAfterMs
+	getAccountSuspendAfterMs,
+	hibernateNowState,
+	pickAccountAfterHibernate
 };

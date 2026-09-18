@@ -103,6 +103,7 @@ Constants.event.reloadAccounts          = "reload-accounts";
 Constants.event.activeAccount           = "active-account";
 Constants.event.updateUnread            = "update-unread";
 Constants.event.toggleNotifications     = "toggle-notifications";
+Constants.event.suspendAccount          = "suspend-account";
 Constants.event.toggleSidebar           = "toggle-sidebar";
 Constants.event.toggleAssistant         = "toggle-assistant";
 Constants.event.sidebarState            = "sidebar-state";

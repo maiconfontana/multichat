@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld("electron", {
 	reorderAccounts: (ids) => ipcRenderer.send(Constants && Constants.event.reorderAccounts, ids),
 	gotoAccount: (id) => ipcRenderer.send(Constants && Constants.event.gotoAccount, id),
 	toggleNotifications: (id, enabled) => ipcRenderer.send(Constants && Constants.event.toggleNotifications, { id, enabled }),
+	suspendAccount: (id) => ipcRenderer.send(Constants && Constants.event.suspendAccount, id),
 	toggleSidebar: () => ipcRenderer.send(Constants && Constants.event.toggleSidebar),
 	toggleAssistant: () => ipcRenderer.send(Constants && Constants.event.toggleAssistant),
 	setSidebarContextOverlay: (open) => ipcRenderer.invoke(Constants && Constants.event.sidebarContextOverlay, !!open),

@@ -2,7 +2,7 @@ const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, N
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
-const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs } = require('./resource-policy');
+const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs, pickAccountAfterHibernate } = require('./resource-policy');
 const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
 const { requestCompletion, testConnection } = require('./openai-client');
 const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
@@ -282,7 +282,8 @@ class MultiChatApp {
 				notifications: a.notifications || { enabled: true },
 				suspend: normalizeAccountSuspend(a.suspend),
 				unread: this.instances[a.id] ? this.instances[a.id].unread : 0,
-				active: this.activeId === a.id
+				active: this.activeId === a.id,
+				loaded: !!(this.instances[a.id] && this.instances[a.id].view)
 			}));
 		});
 
@@ -359,6 +360,10 @@ class MultiChatApp {
 
 		ipcMain.on(Constants.event.gotoAccount, (event, id) => {
 			this.setCurrentView(id);
+		});
+
+		ipcMain.on(Constants.event.suspendAccount, (event, id) => {
+			this.hibernateAccountNow(id);
 		});
 
 		ipcMain.on(Constants.event.reorderAccounts, (event, ids) => {
@@ -695,7 +700,7 @@ class MultiChatApp {
 	}
 
 	chromeBackground() {
-		return this.darkMode ? "#1c1c1c" : "#111b21";
+		return this.darkMode ? "#161717" : "#111b21";
 	}
 
 	applyUiTheme() {
@@ -966,6 +971,22 @@ class MultiChatApp {
 		}, afterMs);
 	}
 
+	isAccountLoaded(id) {
+		return !!(this.instances[id] && this.instances[id].view);
+	}
+
+	hibernateAccountNow(id) {
+		if (typeof id !== "string" || !this.accounts.some(account => account.id === id)) return;
+		if (!this.isAccountLoaded(id)) return;
+
+		if (id === this.activeId) {
+			const fallback = pickAccountAfterHibernate(this.accounts, id, accountId => this.isAccountLoaded(accountId));
+			if (!fallback) return;
+			this.setCurrentView(fallback.id);
+		}
+		this.suspendAccount(id);
+	}
+
 	suspendAccount(id) {
 		const inst = this.instances[id];
 		if (!inst || !inst.view || id === this.activeId) return;
@@ -982,6 +1003,8 @@ class MultiChatApp {
 		} catch (e) {
 			console.warn(`Suspend of "${id}" failed: ${e.message}`);
 		}
+		if (this.sidebarView)
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 	}
 
 	setCurrentView(id) {
