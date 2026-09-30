@@ -9,6 +9,7 @@ const {
 	compareVersions,
 	isNewer,
 	pickAssetForPlatform,
+	pickInstallAsset,
 	normalizeRelease,
 	checkForUpdate
 } = require("../src/update-check");
@@ -31,7 +32,9 @@ const RELEASE_FIXTURE = {
 		{ name: "MultiChat-1.6.0.AppImage", browser_download_url: "https://example.test/MultiChat-1.6.0.AppImage" },
 		{ name: "multichat-1.6.0.tar.xz", browser_download_url: "https://example.test/multichat-1.6.0.tar.xz" },
 		{ name: "MultiChat-1.6.0-setup.exe", browser_download_url: "https://example.test/MultiChat-1.6.0-setup.exe" },
-		{ name: "MultiChat-1.6.0-mac-arm64.dmg", browser_download_url: "https://example.test/MultiChat-1.6.0-mac-arm64.dmg" }
+		{ name: "MultiChat-1.6.0-mac-arm64.dmg", browser_download_url: "https://github.com/maiconfontana/multichat/releases/download/v1.6.0/MultiChat-1.6.0-mac-arm64.dmg" },
+		{ name: "MultiChat-1.6.0-mac-arm64.zip", browser_download_url: "https://github.com/maiconfontana/multichat/releases/download/v1.6.0/MultiChat-1.6.0-mac-arm64.zip" },
+		{ name: "SHA256SUMS.txt", browser_download_url: "https://github.com/maiconfontana/multichat/releases/download/v1.6.0/SHA256SUMS.txt" }
 	]
 };
 
@@ -61,6 +64,9 @@ test("isNewer não acusa atualização quando a versão é igual ou mais nova", 
 test("pickAssetForPlatform escolhe o instalador certo por sistema", () => {
 	assert.equal(pickAssetForPlatform(RELEASE_FIXTURE.assets, "win32").name, "MultiChat-1.6.0-setup.exe");
 	assert.equal(pickAssetForPlatform(RELEASE_FIXTURE.assets, "darwin").name, "MultiChat-1.6.0-mac-arm64.dmg");
+	assert.equal(pickAssetForPlatform(RELEASE_FIXTURE.assets, "darwin", "arm64").name, "MultiChat-1.6.0-mac-arm64.dmg");
+	assert.equal(pickInstallAsset(RELEASE_FIXTURE.assets, "darwin", "arm64").name, "MultiChat-1.6.0-mac-arm64.zip");
+	assert.equal(pickInstallAsset(RELEASE_FIXTURE.assets, "linux").name, "MultiChat-1.6.0.AppImage");
 	assert.equal(pickAssetForPlatform(RELEASE_FIXTURE.assets, "linux").name, "MultiChat-1.6.0.AppImage");
 	assert.equal(pickAssetForPlatform(RELEASE_FIXTURE.assets, "aix").name, "MultiChat-1.6.0.AppImage");
 	assert.equal(pickAssetForPlatform([], "linux"), null);
@@ -73,6 +79,8 @@ test("normalizeRelease sinaliza atualização e aponta para o asset da plataform
 	assert.equal(result.latestVersion, "1.6.0");
 	assert.equal(result.assetName, "MultiChat-1.6.0.AppImage");
 	assert.equal(result.downloadUrl, "https://example.test/MultiChat-1.6.0.AppImage");
+	assert.equal(result.installName, "MultiChat-1.6.0.AppImage");
+	assert.match(result.checksumsUrl, /SHA256SUMS\.txt$/);
 	assert.equal(normalizeRelease(RELEASE_FIXTURE, { currentVersion: "1.6.0", platform: "linux" }).updateAvailable, false);
 	assert.equal(normalizeRelease({ tag_name: "" }, { currentVersion: "1.5.0", platform: "linux" }), null);
 	assert.equal(normalizeRelease(null, { currentVersion: "1.5.0", platform: "linux" }), null);

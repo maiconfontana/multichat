@@ -48,9 +48,13 @@ const PLATFORM_PATTERNS = {
 	linux:  [/\.AppImage$/i, /\.tar\.xz$/i, /\.deb$/i]
 };
 
-const pickAssetForPlatform = (assets, platform) => {
+const pickAssetForPlatform = (assets, platform, arch) => {
 	const list = Array.isArray(assets) ? assets : [];
-	const patterns = PLATFORM_PATTERNS[platform] || PLATFORM_PATTERNS.linux;
+	let patterns = PLATFORM_PATTERNS[platform] || PLATFORM_PATTERNS.linux;
+	if (platform === "darwin" && arch === "arm64")
+		patterns = [/mac-arm64\.dmg$/i, /mac-arm64\.zip$/i, ...patterns];
+	else if (platform === "darwin" && (arch === "x64" || arch === "ia32"))
+		patterns = [/mac-x64\.dmg$/i, /mac-x64\.zip$/i, /-mac\.zip$/i, ...patterns];
 	for (const re of patterns) {
 		const found = list.find((asset) => re.test(String(asset && asset.name || "")));
 		if (found) return found;
@@ -58,20 +62,45 @@ const pickAssetForPlatform = (assets, platform) => {
 	return null;
 };
 
-const normalizeRelease = (payload, { currentVersion, platform }) => {
+const pickInstallAsset = (assets, platform, arch) => {
+	const list = Array.isArray(assets) ? assets : [];
+	const find = (re) => list.find((asset) => re.test(String(asset && asset.name || "")));
+	if (platform === "darwin") {
+		if (arch === "arm64") return find(/mac-arm64\.zip$/i) || find(/mac-arm64\.dmg$/i);
+		return find(/mac-x64\.zip$/i) || find(/-mac\.zip$/i) || find(/mac-x64\.dmg$/i);
+	}
+	if (platform === "win32") return find(/setup\.exe$/i) || find(/-win.*\.zip$/i);
+	return find(/\.AppImage$/i) || find(/\.tar\.xz$/i);
+};
+
+const checksumsAsset = (assets) => {
+	const list = Array.isArray(assets) ? assets : [];
+	return list.find((asset) => /SHA256SUMS\.txt$/i.test(String(asset && asset.name || ""))) || null;
+};
+
+const normalizeRelease = (payload, { currentVersion, platform, arch } = {}) => {
 	if (!payload || typeof payload !== "object") return null;
 	const tag = payload.tag_name || payload.name || "";
 	const latestVersion = parseVersion(tag);
 	if (!latestVersion) return null;
 
-	const asset = pickAssetForPlatform(payload.assets, platform);
+	const tagName = String(payload.tag_name || tag);
+	const asset = pickAssetForPlatform(payload.assets, platform, arch);
+	const install = pickInstallAsset(payload.assets, platform, arch);
+	const sums = checksumsAsset(payload.assets);
 	const pageUrl = payload.html_url || PAGE_URL;
+	const version = tag.replace(/^v/i, "");
 	return {
-		latestVersion: tag.replace(/^v/i, ""),
+		latestVersion: version,
 		currentVersion: String(currentVersion),
 		updateAvailable: isNewer(tag, currentVersion),
 		downloadUrl: asset && asset.browser_download_url ? asset.browser_download_url : pageUrl,
 		assetName: asset ? asset.name : null,
+		installUrl: install && install.browser_download_url ? install.browser_download_url : null,
+		installName: install ? install.name : null,
+		checksumsUrl: sums && sums.browser_download_url
+			? sums.browser_download_url
+			: `https://github.com/${OWNER}/${REPO}/releases/download/${tagName.startsWith("v") ? tagName : `v${version}`}/SHA256SUMS.txt`,
 		releaseUrl: pageUrl,
 		notes: typeof payload.body === "string" ? payload.body.trim() : ""
 	};
@@ -79,7 +108,7 @@ const normalizeRelease = (payload, { currentVersion, platform }) => {
 
 // Consulta a última release. Nunca lança: falha vira { status: "error" } para
 // não atrapalhar a inicialização do app (offline, rate limit, proxy, etc.).
-const checkForUpdate = async ({ currentVersion, platform = process.platform, fetchImpl, timeoutMs = RELEASES_TIMEOUT_MS } = {}) => {
+const checkForUpdate = async ({ currentVersion, platform = process.platform, arch = process.arch, fetchImpl, timeoutMs = RELEASES_TIMEOUT_MS } = {}) => {
 	// fetchImpl ausente usa o fetch global; fetchImpl null significa
 	// "explicitamente indisponível" (útil para testar e para ambientes sem fetch).
 	const doFetch = fetchImpl === undefined ? globalThis.fetch : fetchImpl;
@@ -103,7 +132,7 @@ const checkForUpdate = async ({ currentVersion, platform = process.platform, fet
 			return { status: "error", reason: `http-${response ? response.status : "unknown"}`, currentVersion: String(currentVersion) };
 		}
 
-		const release = normalizeRelease(await response.json(), { currentVersion, platform });
+		const release = normalizeRelease(await response.json(), { currentVersion, platform, arch });
 		if (!release) return { status: "error", reason: "release-parse", currentVersion: String(currentVersion) };
 
 		return { status: release.updateAvailable ? "update" : "current", ...release };
@@ -124,6 +153,7 @@ module.exports = {
 	compareVersions,
 	isNewer,
 	pickAssetForPlatform,
+	pickInstallAsset,
 	normalizeRelease,
 	checkForUpdate
 };
