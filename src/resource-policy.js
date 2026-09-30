@@ -48,16 +48,20 @@ function getAccountSuspendAfterMs(account, envValue = process.env.MULTICHAT_SUSP
 	return policy.enabled ? Math.round(policy.afterMinutes * 60 * 1000) : 0;
 }
 
-function hibernateNowState({ loaded = false, isActive = false, otherCount = 0 } = {}) {
+function hibernateNowState({ loaded = false } = {}) {
 	if (!loaded) return { enabled: false, reason: 'already' };
-	if (isActive && Number(otherCount) < 1) return { enabled: false, reason: 'only-visible' };
 	return { enabled: true, reason: null };
 }
 
 function pickAccountAfterHibernate(accounts, hibernateId, isLoaded = () => false) {
 	const others = (accounts || []).filter(account => account && account.id !== hibernateId);
-	if (others.length === 0) return null;
-	return others.find(account => isLoaded(account.id)) || others[0];
+	return others.find(account => isLoaded(account.id)) || null;
+}
+
+function idleCanvasMode({ accountCount = 0, loadedCount = 0 } = {}) {
+	if (Number(accountCount) <= 0) return 'empty';
+	if (Number(loadedCount) <= 0) return 'hibernated';
+	return null;
 }
 
 module.exports = {
@@ -69,5 +73,6 @@ module.exports = {
 	normalizeAccountSuspend,
 	getAccountSuspendAfterMs,
 	hibernateNowState,
-	pickAccountAfterHibernate
+	pickAccountAfterHibernate,
+	idleCanvasMode
 };

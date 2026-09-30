@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MultiChat</title>
+  <style>
+    :root {
+      --ui-bg: #111b21;
+      --ui-surface: #202c33;
+      --ui-text: #e9edef;
+      --ui-muted: #8696a0;
+      --ui-accent: #00a884;
+      --ui-accent-hover: #00c4a0;
+    }
+    body.theme-dark {
+      --ui-bg: #161717;
+      --ui-surface: #1D1F1F;
+      --ui-text: #f2f2f2;
+      --ui-muted: #a3a3a3;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ui-bg);
+      color: var(--ui-text);
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      user-select: none;
+    }
+    .panel {
+      max-width: 420px;
+      padding: 32px 28px;
+      text-align: center;
+    }
+    .badge {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--ui-surface);
+      color: var(--ui-accent);
+    }
+    .badge svg { width: 34px; height: 34px; }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--ui-muted);
+    }
+    .cta {
+      margin-top: 22px;
+      border: none;
+      border-radius: 24px;
+      padding: 10px 18px;
+      background: var(--ui-accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .cta:hover { background: var(--ui-accent-hover); }
+    .cta:focus-visible {
+      outline: 2px solid var(--ui-accent);
+      outline-offset: 3px;
+    }
+    .cta[hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="badge" id="icon" aria-hidden="true"></div>
+    <h1 id="title">MultiChat</h1>
+    <p id="copy"></p>
+    <button type="button" class="cta" id="add">Adicionar conta</button>
+  </main>
+  <script>
+    const ICONS = {
+      empty: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>',
+      hibernated: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277q.792-.001 1.533-.16a.79.79 0 0 1 .81.316.73.73 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.75.75 0 0 1 6 .278"/></svg>'
+    };
+    const COPY = {
+      empty: {
+        title: 'Nenhuma conta ainda',
+        text: 'Adicione WhatsApp, Teams, Telegram ou outro mensageiro. Cada conta fica isolada, com login próprio.',
+        cta: true
+      },
+      hibernated: {
+        title: 'Tudo hibernando',
+        text: 'Nenhuma conta está na memória agora. Clique em uma na barra lateral para acordar — o login continua salvo.',
+        cta: false
+      }
+    };
+    const apply = (state) => {
+      const mode = state && state.mode === 'hibernated' ? 'hibernated' : 'empty';
+      const next = COPY[mode];
+      document.getElementById('icon').innerHTML = ICONS[mode];
+      document.getElementById('title').textContent = next.title;
+      document.getElementById('copy').textContent = next.text;
+      document.getElementById('add').hidden = !next.cta;
+    };
+    const theme = (dark) => document.body.classList.toggle('theme-dark', !!dark);
+    apply({ mode: 'empty' });
+    if (window.idle) {
+      window.idle.getUiTheme().then(theme).catch(() => {});
+      window.idle.onUiTheme(theme);
+      window.idle.onState(apply);
+      document.getElementById('add').addEventListener('click', () => window.idle.addAccount());
+    }
+  </script>
+</body>
+</html>

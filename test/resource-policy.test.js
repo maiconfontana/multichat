@@ -11,7 +11,8 @@ const {
 	normalizeAccountSuspend,
 	getAccountSuspendAfterMs,
 	hibernateNowState,
-	pickAccountAfterHibernate
+	pickAccountAfterHibernate,
+	idleCanvasMode
 } = require('../src/resource-policy');
 
 test('usa 60 minutos por padrão', () => {
@@ -60,16 +61,22 @@ test('converte a política da conta em milissegundos', () => {
 	assert.equal(getAccountSuspendAfterMs({}, '0'), 0);
 });
 
-test('Hibernar agora só vale para conta carregada com outra para assumir a tela', () => {
+test('Hibernar agora vale para qualquer conta carregada, inclusive a última visível', () => {
 	assert.deepEqual(hibernateNowState({ loaded: false, isActive: false, otherCount: 2 }), { enabled: false, reason: 'already' });
-	assert.deepEqual(hibernateNowState({ loaded: true, isActive: true, otherCount: 0 }), { enabled: false, reason: 'only-visible' });
+	assert.deepEqual(hibernateNowState({ loaded: true, isActive: true, otherCount: 0 }), { enabled: true, reason: null });
 	assert.deepEqual(hibernateNowState({ loaded: true, isActive: true, otherCount: 1 }), { enabled: true, reason: null });
 	assert.deepEqual(hibernateNowState({ loaded: true, isActive: false, otherCount: 0 }), { enabled: true, reason: null });
 });
 
-test('ao hibernar a conta visível, prefere outra já carregada', () => {
+test('ao hibernar a conta visível, só assume outra já carregada', () => {
 	const accounts = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 	assert.equal(pickAccountAfterHibernate(accounts, 'a', id => id === 'c').id, 'c');
-	assert.equal(pickAccountAfterHibernate(accounts, 'a', () => false).id, 'b');
+	assert.equal(pickAccountAfterHibernate(accounts, 'a', () => false), null);
 	assert.equal(pickAccountAfterHibernate([{ id: 'a' }], 'a', () => true), null);
+});
+
+test('empty state cobre zero contas e tudo hibernado', () => {
+	assert.equal(idleCanvasMode({ accountCount: 0, loadedCount: 0 }), 'empty');
+	assert.equal(idleCanvasMode({ accountCount: 3, loadedCount: 0 }), 'hibernated');
+	assert.equal(idleCanvasMode({ accountCount: 3, loadedCount: 1 }), null);
 });

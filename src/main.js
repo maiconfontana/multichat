@@ -2,11 +2,12 @@ const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, N
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
-const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs, pickAccountAfterHibernate } = require('./resource-policy');
+const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs, pickAccountAfterHibernate, idleCanvasMode } = require('./resource-policy');
 const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
 const { requestCompletion, testConnection } = require('./openai-client');
 const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
 const { checkForUpdate, PAGE_URL: RELEASES_URL } = require('./update-check');
+const { avatarFilePath, processAccountAvatar, pngDataUrl, isSafeAccountId } = require('./account-avatar');
 
 // Página pública do projeto (GitHub Pages, publicada a partir de docs/).
 const SITE_URL = "https://maiconfontana.github.io/multichat/";
@@ -64,6 +65,8 @@ class MultiChatApp {
 		this.assistantVisible = false;
 		this.assistantPending = new Map();
 		this.assistantWidth = 400;
+		this.idleView = null;
+		this.idleVisible = false;
 
 		this.bounds = this.store.get("bounds");
 		if (this.bounds == undefined) {
@@ -74,7 +77,7 @@ class MultiChatApp {
 		this.accounts  = this.store.get("accounts");
 		this.instances = {};
 		if (this.accounts == undefined) {
-			this.accounts = [{ id: "default", name: "Default Account" }];
+			this.accounts = [];
 			this.store.set("accounts", this.accounts);
 		}
 
@@ -207,6 +210,8 @@ class MultiChatApp {
 		// suspensas (descarregadas) após um período sem uso (ver suspendAccount).
 		if (this.accounts.length > 0)
 			this.setCurrentView(this.accounts[0].id);
+		else
+			this.showIdleCanvas("empty");
 
 		// Usa a versão empacotada (package.json) quando disponível; Constants.version
 		// funciona como reserva para execução direta do código-fonte.
@@ -281,6 +286,7 @@ class MultiChatApp {
 				url: a.url || (Constants.services[a.type || "whatsapp"] ? Constants.services[a.type || "whatsapp"].url : Constants.whatsapp.url),
 				notifications: a.notifications || { enabled: true },
 				suspend: normalizeAccountSuspend(a.suspend),
+				avatar: this.readAvatarDataUrl(a),
 				unread: this.instances[a.id] ? this.instances[a.id].unread : 0,
 				active: this.activeId === a.id,
 				loaded: !!(this.instances[a.id] && this.instances[a.id].view)
@@ -288,6 +294,7 @@ class MultiChatApp {
 		});
 
 		ipcMain.on(Constants.event.addAccount, (event, data) => {
+			if (!isSafeAccountId(data.id)) return;
 			const svc = Constants.services[data.type] || Constants.services.whatsapp;
 			const account = {
 				id: data.id,
@@ -297,6 +304,7 @@ class MultiChatApp {
 				notifications: { enabled: data.notifications !== false },
 				suspend: normalizeAccountSuspend(data.suspend)
 			};
+			this.applyAvatarPayload(account, data.avatar);
 			this.accounts.push(account);
 			this.store.set("accounts", this.accounts);
 			// A view é criada por setCurrentView (lazy), não aqui.
@@ -312,6 +320,7 @@ class MultiChatApp {
 					if (data.url != undefined) this.accounts[i].url = data.url;
 					if (data.notifications != undefined) this.accounts[i].notifications = data.notifications;
 					if (data.suspend != undefined) this.accounts[i].suspend = normalizeAccountSuspend(data.suspend);
+					this.applyAvatarPayload(this.accounts[i], data.avatar);
 					break;
 				}
 			}
@@ -326,16 +335,15 @@ class MultiChatApp {
 		});
 
 		ipcMain.on(Constants.event.deleteAccount, (event, id) => {
-			if (this.accounts.length <= 1) return;
-
 			let toDelete = -1;
 			for (let idx = 0; idx < this.accounts.length; idx++) {
 				if (this.accounts[idx].id == id) { toDelete = idx; break; }
 			}
-			if (toDelete == -1) return; // id inválido: não remover a última conta por engano
+			if (toDelete == -1) return;
 
 			this.accounts.splice(toDelete, 1);
 			this.store.set("accounts", this.accounts);
+			this.removeAvatarFile(id);
 
 			if (this.instances[id]) {
 				this.clearSuspendTimer(id);
@@ -352,14 +360,26 @@ class MultiChatApp {
 				if (dir) fs.rmSync(dir, { recursive: true, force: true });
 			});
 
-			if (this.activeId == id)
-				this.setCurrentView(this.accounts[0].id);
+			if (this.activeId == id) {
+				const loaded = this.accounts.find(account => this.isAccountLoaded(account.id));
+				if (loaded) this.setCurrentView(loaded.id);
+				else this.showIdleCanvas(idleCanvasMode({
+					accountCount: this.accounts.length,
+					loadedCount: this.loadedAccountCount()
+				}) || "empty");
+			} else if (this.accounts.length === 0) {
+				this.showIdleCanvas("empty");
+			}
 
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
 		});
 
 		ipcMain.on(Constants.event.gotoAccount, (event, id) => {
 			this.setCurrentView(id);
+		});
+
+		ipcMain.on(Constants.event.idleAddAccount, () => {
+			this.promptAddAccount();
 		});
 
 		ipcMain.on(Constants.event.suspendAccount, (event, id) => {
@@ -616,6 +636,7 @@ class MultiChatApp {
 		this.assistantVisible = visible;
 		if (this.assistantView && !this.assistantView.webContents.isDestroyed()) this.assistantView.setVisible(visible);
 		for (const id in this.instances) this.layoutAccountView(id);
+		this.layoutIdleView();
 		this.layoutAssistantView();
 		if (visible) this.assistantView.webContents.focus();
 		else if (this.activeId && this.instances[this.activeId]?.view) this.instances[this.activeId].view.webContents.focus();
@@ -719,6 +740,10 @@ class MultiChatApp {
 			this.sharePicker.setBackgroundColor(bg);
 			this.sharePicker.webContents.send(Constants.event.uiTheme, dark);
 		}
+		if (this.idleView && !this.idleView.webContents.isDestroyed()) {
+			this.idleView.setBackgroundColor(bg);
+			this.idleView.webContents.send(Constants.event.uiTheme, dark);
+		}
 	}
 
 	setDarkMode(enabled) {
@@ -735,6 +760,7 @@ class MultiChatApp {
 		this.updateSidebarBounds();
 		for (const id in this.instances)
 			this.layoutAccountView(id);
+		this.layoutIdleView();
 		this.layoutAssistantView();
 		this.refreshApplicationMenu();
 	}
@@ -751,6 +777,8 @@ class MultiChatApp {
 			return;
 		}
 		this.window.contentView.addChildView(this.sidebarView, 0);
+		if (this.idleVisible && this.idleView && !this.idleView.webContents.isDestroyed())
+			this.window.contentView.addChildView(this.idleView);
 		if (this.assistantVisible && this.assistantView && !this.assistantView.webContents.isDestroyed())
 			this.window.contentView.addChildView(this.assistantView);
 	}
@@ -842,6 +870,122 @@ class MultiChatApp {
 			this.sidebarView.webContents.send(Constants.event.sidebarState, this.sidebarCollapsed);
 			this.sidebarView.webContents.send(Constants.event.uiTheme, !!this.darkMode);
 		});
+	}
+
+	avatarPath(id) {
+		return avatarFilePath(app.getPath("userData"), id);
+	}
+
+	readAvatarDataUrl(account) {
+		if (!account || !account.customAvatar || !isSafeAccountId(account.id)) return null;
+		try {
+			const file = this.avatarPath(account.id);
+			if (!fs.existsSync(file)) return null;
+			return pngDataUrl(fs.readFileSync(file));
+		} catch (e) {
+			console.error("Failed to read account avatar:", e);
+			return null;
+		}
+	}
+
+	removeAvatarFile(id) {
+		try {
+			if (!isSafeAccountId(id)) return;
+			const file = this.avatarPath(id);
+			if (fs.existsSync(file)) fs.unlinkSync(file);
+		} catch (e) {
+			console.error("Failed to remove account avatar:", e);
+		}
+	}
+
+	writeAvatarFile(id, dataUrl) {
+		const png = processAccountAvatar(nativeImage, dataUrl);
+		const file = this.avatarPath(id);
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		fs.writeFileSync(file, png);
+	}
+
+	applyAvatarPayload(account, payload) {
+		if (!account || !payload || payload.action === "keep") return;
+		if (payload.action === "clear") {
+			this.removeAvatarFile(account.id);
+			account.customAvatar = false;
+			return;
+		}
+		if (payload.action !== "set") return;
+		try {
+			this.writeAvatarFile(account.id, payload.dataUrl);
+			account.customAvatar = true;
+		} catch (e) {
+			console.error("Failed to save account avatar:", e);
+		}
+	}
+
+	promptAddAccount() {
+		if (this.sidebarView && !this.sidebarView.webContents.isDestroyed())
+			this.sidebarView.webContents.send(Constants.event.openAddAccount);
+	}
+
+	loadedAccountCount() {
+		return this.accounts.filter(account => this.isAccountLoaded(account.id)).length;
+	}
+
+	createIdleView() {
+		if (this.idleView && !this.idleView.webContents.isDestroyed()) return;
+		this.idleView = new WebContentsView({
+			webPreferences: {
+				preload: path.join(__dirname, "idle-preload.js"),
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true
+			}
+		});
+		this.idleView.setBackgroundColor(this.chromeBackground());
+		this.idleView.webContents.loadFile(path.join(__dirname, "idle.html"));
+		this.idleView.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+		this.idleView.setVisible(false);
+		this.window.contentView.addChildView(this.idleView);
+		this.idleView.webContents.on("did-finish-load", () => {
+			if (!this.idleView || this.idleView.webContents.isDestroyed()) return;
+			this.idleView.webContents.send(Constants.event.uiTheme, !!this.darkMode);
+			if (this.idleVisible)
+				this.idleView.webContents.send(Constants.event.idleState, { mode: this.idleMode || "empty" });
+		});
+	}
+
+	layoutIdleView() {
+		if (!this.idleView || this.idleView.webContents.isDestroyed()) return;
+		const b = this.window.getContentBounds();
+		const sbw = this.getSidebarWidth();
+		const assistantWidth = this.assistantVisible ? Math.min(this.assistantWidth, Math.max(280, b.width - sbw - 240)) : 0;
+		this.idleView.setBounds({ x: sbw, y: 0, width: Math.max(1, b.width - sbw - assistantWidth), height: b.height });
+	}
+
+	showIdleCanvas(mode = "empty") {
+		this.activeId = null;
+		this.idleMode = mode === "hibernated" ? "hibernated" : "empty";
+		this.window.setTitle(Constants.appName);
+		for (const aid in this.instances) {
+			if (this.instances[aid].view)
+				this.instances[aid].view.setVisible(false);
+		}
+		this.createIdleView();
+		this.idleVisible = true;
+		this.idleView.setVisible(true);
+		this.layoutIdleView();
+		if (!this.idleView.webContents.isDestroyed())
+			this.idleView.webContents.send(Constants.event.idleState, { mode: this.idleMode });
+		this.syncSidebarZOrder();
+		if (this.sidebarView && !this.sidebarView.webContents.isDestroyed()) {
+			this.sidebarView.webContents.send(Constants.event.activeAccount, null);
+			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+		}
+	}
+
+	hideIdleCanvas() {
+		this.idleVisible = false;
+		if (this.idleView && !this.idleView.webContents.isDestroyed())
+			this.idleView.setVisible(false);
 	}
 
 	createAccountView(account) {
@@ -981,10 +1125,12 @@ class MultiChatApp {
 
 		if (id === this.activeId) {
 			const fallback = pickAccountAfterHibernate(this.accounts, id, accountId => this.isAccountLoaded(accountId));
-			if (!fallback) return;
-			this.setCurrentView(fallback.id);
+			if (fallback) this.setCurrentView(fallback.id);
+			else this.activeId = null;
 		}
 		this.suspendAccount(id);
+		if (!this.activeId)
+			this.showIdleCanvas("hibernated");
 	}
 
 	suspendAccount(id) {
@@ -1017,6 +1163,8 @@ class MultiChatApp {
 			if (!view) return;
 		}
 
+		this.hideIdleCanvas();
+
 		// Hide all account views, show only the active one
 		for (const aid in this.instances) {
 			if (this.instances[aid].view)
@@ -1045,6 +1193,12 @@ class MultiChatApp {
 	}
 
 	cycleAccount(dir) {
+		if (this.accounts.length === 0) return;
+		if (!this.activeId) {
+			const pick = dir > 0 ? this.accounts[0] : this.accounts[this.accounts.length - 1];
+			this.setCurrentView(pick.id);
+			return;
+		}
 		if (this.accounts.length < 2) return;
 		const idx = this.accounts.findIndex(a => a.id === this.activeId);
 		const next = (idx + dir + this.accounts.length) % this.accounts.length;
@@ -1088,6 +1242,7 @@ class MultiChatApp {
 		this.updateSidebarBounds();
 		for (const id in this.instances)
 			this.layoutAccountView(id);
+		this.layoutIdleView();
 		this.layoutAssistantView();
 	}
 
