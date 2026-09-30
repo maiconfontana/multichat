@@ -27,6 +27,71 @@ const TYPE_LABELS = {
 	discord: 'Discord', slack: 'Slack', custom: 'Personalizado'
 };
 
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+const LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
+let pendingLogo = { kind: 'default' };
+
+const serviceAvatar = (type) => {
+	const color = TYPE_COLORS[type] || TYPE_COLORS.custom;
+	const icon = SERVICE_ICONS[type] || SERVICE_ICONS.custom;
+	return { color, icon };
+};
+
+const paintAvatar = (el, { color, icon, image }) => {
+	if (!el) return;
+	el.style.background = image ? '#1a1a1a' : color;
+	el.replaceChildren();
+	if (image) {
+		const img = document.createElement('img');
+		img.alt = '';
+		img.src = image;
+		el.appendChild(img);
+		return;
+	}
+	el.innerHTML = icon;
+};
+
+const renderLogoPreview = () => {
+	const type = $("#acct-type")?.value || "whatsapp";
+	const preview = $("#acct-logo-preview");
+	const reset = $("#acct-logo-reset");
+	const svc = serviceAvatar(type);
+	if (pendingLogo.kind === 'custom' || pendingLogo.kind === 'saved')
+		paintAvatar(preview, { ...svc, image: pendingLogo.dataUrl });
+	else
+		paintAvatar(preview, svc);
+	if (reset) reset.hidden = pendingLogo.kind === 'default';
+};
+
+const setPendingLogo = (next) => {
+	pendingLogo = next;
+	renderLogoPreview();
+};
+
+const openLogoPicker = () => $("#acct-logo-file")?.click();
+
+const onLogoFile = (file) => {
+	if (!file) return;
+	if (!LOGO_TYPES.has(file.type) && !/\.(png|jpe?g|webp|gif)$/i.test(file.name || '')) {
+		alert("Use PNG, JPEG, WebP ou GIF.");
+		return;
+	}
+	if (file.size > LOGO_MAX_BYTES) {
+		alert("A imagem é grande demais (máximo 5 MB).");
+		return;
+	}
+	const reader = new FileReader();
+	reader.onload = () => setPendingLogo({ kind: 'custom', dataUrl: String(reader.result || '') });
+	reader.onerror = () => alert("Não foi possível ler a imagem.");
+	reader.readAsDataURL(file);
+};
+
+const avatarPayload = () => {
+	if (pendingLogo.kind === 'custom') return { action: 'set', dataUrl: pendingLogo.dataUrl };
+	if (pendingLogo.kind === 'default') return { action: 'clear' };
+	return { action: 'keep' };
+};
+
 let activeId = null;
 const DRAG_THRESHOLD = 6;
 let drag = null;
@@ -75,8 +140,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&
 
 let contextMenuAcct = null;
 const HIBERNATE_HINTS = {
-	already: "Esta conta já está hibernada",
-	"only-visible": "Abra outra conta para hibernar esta"
+	already: "Esta conta já está hibernada"
 };
 const hibernateNowState = ({ loaded = false, isActive = false, otherCount = 0 } = {}) => {
 	if (!loaded) return { enabled: false, reason: "already" };
@@ -139,6 +203,9 @@ const openEditAccount = async (acct) => {
 	$("#acct-notif-switch").checked = acct.notifOn !== false;
 	fillSuspendFields(acct.suspend);
 	updateUrlVisibility(acct.type || "custom");
+	setPendingLogo(acct.avatar
+		? { kind: 'saved', dataUrl: acct.avatar }
+		: { kind: 'default' });
 	$("#accountModalLabel").textContent = "Editar conta";
 	await showSidebarModal("#accountModal");
 	$("#acct-name").focus();
@@ -193,15 +260,13 @@ const showContextMenu = async (event, itemEl, acct) => {
 	notifBtn.querySelector("span").textContent = acct.notifOn ? "Desligar notificações" : "Ligar notificações";
 	const hibernateBtn = menu.querySelector('[data-action="hibernate"]');
 	const hibernate = hibernateNowState({
-		loaded: !!acct.loaded,
-		isActive: acct.id === activeId,
-		otherCount: Math.max(0, $$(".acct-item").length - 1)
+		loaded: !!acct.loaded
 	});
 	hibernateBtn.disabled = !hibernate.enabled;
 	hibernateBtn.title = hibernate.enabled ? "Descarrega esta conta da memória agora" : (HIBERNATE_HINTS[hibernate.reason] || "");
 	const removeBtn = menu.querySelector('[data-action="remove"]');
-	removeBtn.disabled = $$(".acct-item").length <= 1;
-	removeBtn.title = removeBtn.disabled ? "Mantenha ao menos uma conta" : "";
+	removeBtn.disabled = false;
+	removeBtn.title = "";
 
 	menu.hidden = false;
 	menu.style.visibility = "hidden";
@@ -260,18 +325,24 @@ const renderList = (accounts) => {
 		const label = TYPE_LABELS[acct.type] || 'Personalizado';
 
 		const el = document.createElement("div");
-		el.className = "acct-item" + (isActive ? " active" : "");
+		el.className = "acct-item" + (isActive ? " active" : "") + (acct.loaded ? "" : " is-asleep");
 		el.dataset.id = acct.id;
-		el.title = acct.name;
+		el.title = acct.loaded ? acct.name : `${acct.name} (hibernada)`;
 		el.innerHTML = ACCOUNT_TEMPLATE
 			.replace(/__COLOR__/g, color)
-			.replace(/__ICON__/g, icon)
+			.replace(/__ICON__/g, acct.avatar ? '' : icon)
 			.replace(/__ID__/g, esc(acct.id))
 			.replace(/__NAME__/g, esc(acct.name))
-			.replace(/__LABEL__/g, esc(label))
+			.replace(/__LABEL__/g, esc(acct.loaded ? label : `${label} · hibernada`))
 			.replace(/__NOTIF__/g, notifOn ? '' : '<i class="bi bi-bell-slash notif-off" title="Notificações desligadas"></i>')
 			.replace(/__NOTIF_TITLE__/g, notifOn ? 'Desligar notificações' : 'Ligar notificações')
 			.replace(/__NOTIF_ICON__/g, notifOn ? 'bi-bell-fill' : 'bi-bell-slash-fill');
+
+		paintAvatar(el.querySelector(".acct-avatar"), {
+			color,
+			icon,
+			image: acct.avatar || null
+		});
 
 		const badge = el.querySelector(".acct-unread-badge");
 		const pill = el.querySelector(".acct-unread");
@@ -292,7 +363,7 @@ const renderList = (accounts) => {
 		el.addEventListener("click", (e) => {
 			if (e.target.closest(".acct-actions")) return;
 			if (suppressClick) { suppressClick = false; return; }
-			if (acct.id !== activeId) window.electron.gotoAccount(acct.id);
+			if (acct.id !== activeId || !acct.loaded) window.electron.gotoAccount(acct.id);
 		});
 
 		el.addEventListener("contextmenu", (e) => {
@@ -303,6 +374,7 @@ const renderList = (accounts) => {
 				url: acct.url || "",
 				notifOn,
 				suspend: acct.suspend,
+				avatar: acct.avatar || null,
 				loaded: !!acct.loaded
 			});
 		});
@@ -322,7 +394,8 @@ const renderList = (accounts) => {
 				type: acct.type || "custom",
 				url: acct.url || "",
 				notifOn,
-				suspend: acct.suspend
+				suspend: acct.suspend,
+				avatar: acct.avatar || null
 			});
 		});
 
@@ -383,8 +456,27 @@ const updateUrlVisibility = (type) => {
 	}
 };
 
+const openNewAccountModal = async (anchorEl) => {
+	pendingModal = true;
+	modalAnchorRect = (anchorEl || $("#btn-add")).getBoundingClientRect();
+	await closeContextMenu();
+	$("#acct-action").value = "new";
+	$("#acct-id").value = "";
+	$("#acct-name").value = "";
+	$("#acct-type").value = "whatsapp";
+	$("#acct-url").value = "";
+	$("#acct-notif-switch").checked = true;
+	fillSuspendFields({ enabled: true, afterMinutes: SUSPEND_MINUTES_DEFAULT });
+	updateUrlVisibility("whatsapp");
+	setPendingLogo({ kind: 'default' });
+	$("#accountModalLabel").textContent = "Nova conta / mensageiro";
+	await showSidebarModal("#accountModal");
+	$("#acct-name").focus();
+};
+
 $("#acct-type").addEventListener("change", function () {
 	updateUrlVisibility(this.value);
+	renderLogoPreview();
 });
 
 $("#acct-suspend-switch").addEventListener("change", updateSuspendVisibility);
@@ -400,8 +492,9 @@ const updateUnreadUI = (id, unread) => {
 };
 
 const setActiveUI = (id) => {
-	activeId = id;
-	$$(".acct-item").forEach(el => el.classList.toggle("active", el.dataset.id === id));
+	activeId = id || null;
+	$$(".acct-item").forEach(el => el.classList.toggle("active", !!id && el.dataset.id === id));
+	if (!id) return;
 	const el = $(`.acct-item[data-id="${CSS.escape(id)}"]`);
 	if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
 };
@@ -440,6 +533,8 @@ const init = async () => {
 	window.electron.onUiTheme(setThemeUI);
 	if (window.electron.getUiTheme)
 		window.electron.getUiTheme().then(setThemeUI);
+	if (window.electron.onOpenAddAccount)
+		window.electron.onOpenAddAccount(() => openNewAccountModal());
 };
 
 init();
@@ -470,22 +565,8 @@ $("#btn-toggle-sidebar").addEventListener("click", () => {
 	window.electron.toggleSidebar();
 });
 
-$("#btn-add").addEventListener("click", async () => {
-	pendingModal = true;
-	modalAnchorRect = $("#btn-add").getBoundingClientRect();
-	await closeContextMenu();
-	$("#acct-action").value = "new";
-	$("#acct-id").value = "";
-	$("#acct-name").value = "";
-	$("#acct-type").value = "whatsapp";
-	$("#acct-url").value = "";
-	$("#acct-notif-switch").checked = true;
-	fillSuspendFields({ enabled: true, afterMinutes: SUSPEND_MINUTES_DEFAULT });
-	updateUrlVisibility("whatsapp");
-	$("#accountModalLabel").textContent = "Nova conta / mensageiro";
-	await showSidebarModal("#accountModal");
-	$("#acct-name").focus();
-});
+$("#btn-add").addEventListener("click", () => openNewAccountModal($("#btn-add")));
+$("#sb-empty-add")?.addEventListener("click", () => openNewAccountModal($("#btn-add")));
 
 // Salvar
 const saveAccount = () => {
@@ -508,7 +589,8 @@ const saveAccount = () => {
 			type: type,
 			url: type === "custom" ? url : undefined,
 			notifications: { enabled: notifEnabled },
-			suspend
+			suspend,
+			avatar: avatarPayload()
 		});
 	} else {
 		window.electron.updateAccount({
@@ -517,7 +599,8 @@ const saveAccount = () => {
 			type: type,
 			url: type === "custom" ? url : undefined,
 			notifications: { enabled: notifEnabled },
-			suspend
+			suspend,
+			avatar: avatarPayload()
 		});
 	}
 
@@ -525,6 +608,15 @@ const saveAccount = () => {
 };
 
 $("#accountModal").querySelector(".acct-save").addEventListener("click", saveAccount);
+
+$("#acct-logo-btn").addEventListener("click", openLogoPicker);
+$("#acct-logo-choose").addEventListener("click", openLogoPicker);
+$("#acct-logo-reset").addEventListener("click", () => setPendingLogo({ kind: 'default' }));
+$("#acct-logo-file").addEventListener("change", (e) => {
+	const file = e.target.files && e.target.files[0];
+	e.target.value = "";
+	onLogoFile(file);
+});
 
 $("#acct-name").addEventListener("keypress", (e) => { if (e.key === "Enter") saveAccount(); });
 $("#acct-url").addEventListener("keypress", (e) => { if (e.key === "Enter") saveAccount(); });

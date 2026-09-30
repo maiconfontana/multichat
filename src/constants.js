@@ -110,6 +110,9 @@ Constants.event.sidebarState            = "sidebar-state";
 Constants.event.sidebarContextOverlay   = "sidebar-context-overlay";
 Constants.event.getUiTheme              = "get-ui-theme";
 Constants.event.uiTheme                 = "ui-theme";
+Constants.event.idleState               = "idle-state";
+Constants.event.idleAddAccount          = "idle-add-account";
+Constants.event.openAddAccount          = "open-add-account";
 
 Constants.event.getShareSources   = "get-share-sources";
 Constants.event.setShareSelected  = "set-share-selected";

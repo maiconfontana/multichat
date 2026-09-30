@@ -84,6 +84,8 @@
     .acct-item:hover { background: var(--ui-surface); }
     .acct-item.active { background: var(--ui-elevated); }
     .acct-item.is-dragging { opacity: .55; }
+    .acct-item.is-asleep .acct-avatar { opacity: .55; }
+    .acct-item.is-asleep .acct-name { color: var(--ui-muted); }
 
     .acct-avatar-wrap {
       position: relative;
@@ -95,6 +97,43 @@
       overflow: hidden;
     }
     .acct-avatar svg { width: 24px; height: 24px; }
+    .acct-avatar img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+    .acct-logo-picker { display: flex; align-items: center; gap: 10px; }
+    .acct-logo-preview {
+      position: relative;
+      width: 40px; height: 40px; padding: 0;
+      border: none; background: transparent;
+      cursor: pointer; flex: 0 0 40px;
+    }
+    .acct-logo-preview .acct-avatar { pointer-events: none; }
+    .acct-logo-edit {
+      position: absolute; right: -2px; bottom: -2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--ui-accent); color: #fff;
+      font-size: 9px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--ui-surface);
+    }
+    .acct-logo-preview:focus-visible {
+      outline: 2px solid var(--ui-accent);
+      outline-offset: 2px;
+      border-radius: 50%;
+    }
+    .acct-logo-actions { min-width: 0; }
+    .acct-logo-reset {
+      display: block;
+      padding: 0;
+      font-size: 11px;
+      color: var(--ui-muted);
+      text-decoration: none;
+    }
+    .acct-logo-reset:hover { color: var(--ui-text); }
+    .acct-logo-reset[hidden] { display: none !important; }
     .acct-meta { flex: 1; min-width: 0; }
     .acct-name { font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .acct-sub { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ui-muted); margin-top: 1px; }
@@ -141,11 +180,30 @@
     body.collapsed .acct-unread-badge.show { display: flex; }
     body.collapsed .acct-item.active .acct-unread-badge { border-color: var(--ui-elevated); }
     body.collapsed .acct-item:hover .acct-unread-badge { border-color: var(--ui-surface); }
-    body.collapsed #sb-empty { font-size: 12px; padding: 30px 4px; }
-    body.collapsed #sb-empty i { font-size: 26px; }
+    body.collapsed #sb-empty { font-size: 12px; padding: 16px 4px; }
+    body.collapsed #sb-empty i { font-size: 22px; }
+    body.collapsed #sb-empty p,
+    body.collapsed #sb-empty-add { display: none; }
 
-    #sb-empty { display: none; text-align: center; color: var(--ui-muted); padding: 40px 20px; font-size: 14px; }
-    #sb-empty i { font-size: 40px; display: block; margin-bottom: 12px; opacity: .5; }
+    #sb-empty { display: none; text-align: center; color: var(--ui-muted); padding: 36px 16px 20px; font-size: 14px; }
+    #sb-empty i { font-size: 36px; display: block; margin-bottom: 10px; opacity: .5; }
+    #sb-empty p { margin: 8px 0 0; font-size: 12px; line-height: 1.4; }
+    #sb-empty-add {
+      margin-top: 14px;
+      border: none;
+      border-radius: 18px;
+      padding: 7px 14px;
+      background: var(--ui-accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #sb-empty-add:hover { background: var(--ui-accent-hover); }
+    #sb-empty-add:focus-visible {
+      outline: 2px solid var(--ui-accent);
+      outline-offset: 2px;
+    }
 
     /* Modal compacto na sidebar expandida; recolhida usa overlay como o menu de contexto. */
     #accountModal .modal-dialog,
@@ -262,7 +320,12 @@
     </div>
 
     <div id="sb-list"></div>
-    <div id="sb-empty"><i class="bi bi-chat-dots"></i>Nenhuma conta ainda.<br>Toque no <b>+</b> para adicionar.</div>
+    <div id="sb-empty">
+      <i class="bi bi-plus-circle"></i>
+      Nenhuma conta ainda
+      <p>Use o + para adicionar WhatsApp, Teams, Telegram e o resto.</p>
+      <button type="button" id="sb-empty-add">Adicionar conta</button>
+    </div>
   </div>
 
   <div id="acct-ctx-backdrop" hidden></div>
@@ -315,6 +378,22 @@
               <label for="acct-name" class="form-label mb-1">Nome / Descrição:</label>
               <input type="text" class="form-control form-control-sm ui-field" id="acct-name" placeholder="Ex: Pessoal, Trabalho..." required>
               <div class="invalid-feedback text-danger">O nome é obrigatório!</div>
+            </div>
+
+            <div class="mb-2">
+              <span class="form-label mb-1 d-block">Logo da conta</span>
+              <div class="acct-logo-picker">
+                <button type="button" id="acct-logo-btn" class="acct-logo-preview" title="Enviar imagem" aria-label="Enviar logo da conta">
+                  <span class="acct-avatar" id="acct-logo-preview"></span>
+                  <span class="acct-logo-edit" aria-hidden="true"><i class="bi bi-camera-fill"></i></span>
+                </button>
+                <div class="acct-logo-actions">
+                  <button type="button" class="btn btn-sm btn-secondary" id="acct-logo-choose">Enviar imagem</button>
+                  <button type="button" class="btn btn-link btn-sm acct-logo-reset p-0 mt-1" id="acct-logo-reset">Usar logo do serviço</button>
+                </div>
+              </div>
+              <input type="file" id="acct-logo-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+              <div class="form-text mb-0 mt-1" style="font-size:11px; color:var(--ui-muted);">A foto entra na mesma moldura redonda da barra lateral.</div>
             </div>
 
             <div class="mb-2" id="url-group" style="display:none;">
