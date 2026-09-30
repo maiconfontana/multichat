@@ -2,11 +2,13 @@ const { app, BrowserWindow, WebContentsView, ipcMain, Menu, Tray, nativeImage, N
 const Store = require('electron-store').default;
 const path  = require('node:path');
 const fs    = require('node:fs');
+const os    = require('node:os');
 const { getSuspendAfterMs, formatSuspendPolicy, normalizeAccountSuspend, getAccountSuspendAfterMs, pickAccountAfterHibernate, idleCanvasMode } = require('./resource-policy');
 const { buildRequest, normalizeContext, normalizeDraft } = require('./assistant-core');
 const { requestCompletion, testConnection } = require('./openai-client');
 const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, resolveApiKey, selectionKey } = require('./assistant-settings');
 const { checkForUpdate, PAGE_URL: RELEASES_URL } = require('./update-check');
+const { excerptNotes, isTrustedDownloadUrl, parseSha256Sums, expectedHash, sha256File, macBundlePath, downloadFile, readText, spawnDetached, writeMacSwapScript, writeLinuxSwapScript, unpackMacZip } = require('./apply-update');
 const { avatarFilePath, processAccountAvatar, pngDataUrl, isSafeAccountId } = require('./account-avatar');
 
 // Página pública do projeto (GitHub Pages, publicada a partir de docs/).
@@ -227,6 +229,8 @@ class MultiChatApp {
 
 		this.activeNotifications = [];
 		this.updateCheckInFlight = null;
+		this.updateApplyInFlight = false;
+		this.pendingUpdate = null;
 
 		// Checagem silenciosa de versão: só avisa se houver release mais nova.
 		this.scheduleUpdateCheck();
@@ -1316,31 +1320,26 @@ class MultiChatApp {
 	}
 
 	// ── Verificação de atualizações ──
-	// Consulta a última release pública e, se houver versão nova, avisa o
-	// usuário e oferece o download no navegador. Não baixa nem instala nada.
+	// Consulta a última release, avisa com notificação e oferece changelog
+	// ou instalação in-app (SHA-256) no binário empacotado.
 	async checkForUpdates({ userInitiated = false } = {}) {
 		if (this.updateCheckInFlight) return this.updateCheckInFlight;
 
 		this.updateCheckInFlight = (async () => {
 			const result = await checkForUpdate({
 				currentVersion: this.currentVersion || app.getVersion(),
-				platform: process.platform
+				platform: process.platform,
+				arch: process.arch
 			});
 
-			const version = result.latestVersion || result.currentVersion;
 			if (result.status === "update") {
-				const { response } = await dialog.showMessageBox(this.window, {
-					type: "info",
-					title: "Atualização disponível",
-					message: `O MultiChat ${version} já está disponível.`,
-					detail: `Você está usando a versão ${result.currentVersion}. O download será aberto no seu navegador; instale por cima da versão atual — as contas configuradas são preservadas.`,
-					buttons: ["Baixar agora", "Mais tarde"],
-					defaultId: 0,
-					cancelId: 1,
-					noLink: true
-				});
-				if (response === 0) await shell.openExternal(result.downloadUrl || result.releaseUrl);
+				this.pendingUpdate = result;
+				if (userInitiated)
+					await this.promptUpdate(result);
+				else
+					this.notifyUpdate(result);
 			} else if (result.status === "current") {
+				this.pendingUpdate = null;
 				if (userInitiated) {
 					await dialog.showMessageBox(this.window, {
 						type: "info",
@@ -1351,7 +1350,7 @@ class MultiChatApp {
 					});
 				}
 			} else if (userInitiated) {
-				await dialog.showMessageBox(this.window, {
+				const { response } = await dialog.showMessageBox(this.window, {
 					type: "warning",
 					title: "Não foi possível verificar",
 					message: "A verificação de atualizações falhou.",
@@ -1360,15 +1359,145 @@ class MultiChatApp {
 					defaultId: 0,
 					cancelId: 1,
 					noLink: true
-				}).then(({ response }) => {
-					if (response === 0) return shell.openExternal(RELEASES_URL);
 				});
+				if (response === 0) await shell.openExternal(RELEASES_URL);
 			}
 
 			return result;
 		})().finally(() => { this.updateCheckInFlight = null; });
 
 		return this.updateCheckInFlight;
+	}
+
+	notifyUpdate(result) {
+		const version = result.latestVersion;
+		if (this.store.get("dismissedUpdate") === version) return;
+
+		const showPrompt = () => {
+			this.showHide(false);
+			this.promptUpdate(result).catch((err) => console.warn(`MultiChat: prompt de atualização falhou: ${err.message}`));
+		};
+
+		if (!Notification.isSupported()) {
+			showPrompt();
+			return;
+		}
+
+		const n = new Notification({
+			title: "Há uma nova versão disponível",
+			body: `MultiChat ${version}. Toque para ver o changelog ou atualizar.`,
+			silent: false,
+			urgency: "normal"
+		});
+		n.on("click", showPrompt);
+		n.show();
+	}
+
+	async promptUpdate(result) {
+		if (!result || result.status !== "update") return;
+		const version = result.latestVersion;
+		const canInstall = !!(app.isPackaged && result.installUrl && isTrustedDownloadUrl(result.installUrl));
+		const { response } = await dialog.showMessageBox(this.window, {
+			type: "info",
+			title: "Atualização disponível",
+			message: `Há uma nova versão disponível: MultiChat ${version}.`,
+			detail: `Você está na ${result.currentVersion}.\n\n${excerptNotes(result.notes)}`,
+			buttons: canInstall
+				? ["Atualizar agora", "Ver changelog", "Depois"]
+				: ["Baixar agora", "Ver changelog", "Depois"],
+			defaultId: 0,
+			cancelId: 2,
+			noLink: true
+		});
+		if (response === 1) {
+			await shell.openExternal(result.releaseUrl || RELEASES_URL);
+			return;
+		}
+		if (response === 2) {
+			this.store.set("dismissedUpdate", version);
+			return;
+		}
+		this.store.delete("dismissedUpdate");
+		if (canInstall) await this.applyDownloadedUpdate(result);
+		else await shell.openExternal(result.downloadUrl || result.releaseUrl || RELEASES_URL);
+	}
+
+	async applyDownloadedUpdate(result) {
+		if (this.updateApplyInFlight) return;
+		this.updateApplyInFlight = true;
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "multichat-dl-"));
+		const destFile = path.join(tmpDir, result.installName || "update.bin");
+		try {
+			if (Notification.isSupported()) {
+				new Notification({
+					title: "Baixando atualização",
+					body: `MultiChat ${result.latestVersion} — o app vai reiniciar ao terminar.`,
+					silent: true
+				}).show();
+			}
+
+			await downloadFile(result.installUrl, destFile);
+			if (result.checksumsUrl && isTrustedDownloadUrl(result.checksumsUrl)) {
+				const sums = parseSha256Sums(await readText(result.checksumsUrl));
+				const expected = expectedHash(sums, result.installName);
+				if (expected) {
+					const actual = await sha256File(destFile);
+					if (actual !== expected) throw new Error("checksum-mismatch");
+				}
+			}
+
+			await this.installAndRelaunch(result, destFile);
+		} catch (err) {
+			console.error("MultiChat: falha ao aplicar atualização:", err);
+			const { response } = await dialog.showMessageBox(this.window, {
+				type: "error",
+				title: "Não foi possível atualizar",
+				message: "O download ou a verificação da atualização falhou.",
+				detail: "Você pode baixar o instalador no navegador. As contas já configuradas não são afetadas.",
+				buttons: ["Abrir download", "Fechar"],
+				defaultId: 0,
+				cancelId: 1,
+				noLink: true
+			});
+			if (response === 0) await shell.openExternal(result.downloadUrl || result.releaseUrl || RELEASES_URL);
+		} finally {
+			this.updateApplyInFlight = false;
+		}
+	}
+
+	async installAndRelaunch(result, destFile) {
+		const name = String(result.installName || destFile);
+		if (process.platform === "darwin") {
+			const bundle = macBundlePath(process.execPath);
+			if (!bundle) throw new Error("not-an-app-bundle");
+			if (/\.zip$/i.test(name)) {
+				const nextApp = await unpackMacZip(destFile);
+				const script = writeMacSwapScript({ pid: process.pid, sourceApp: nextApp, destApp: bundle });
+				spawnDetached("/bin/bash", [script]);
+			} else {
+				spawnDetached("open", [destFile]);
+				await dialog.showMessageBox(this.window, {
+					type: "info",
+					title: "Instalador aberto",
+					message: "Arraste o MultiChat para Aplicativos e reabra o app.",
+					buttons: ["OK"],
+					noLink: true
+				});
+				return;
+			}
+		} else if (process.platform === "linux") {
+			const current = process.env.APPIMAGE;
+			if (!current) throw new Error("not-an-appimage");
+			const script = writeLinuxSwapScript({ pid: process.pid, source: destFile, dest: current });
+			spawnDetached("/bin/bash", [script]);
+		} else if (process.platform === "win32") {
+			spawnDetached(destFile, []);
+		} else {
+			throw new Error("unsupported-platform");
+		}
+
+		this.isQuit = true;
+		app.quit();
 	}
 
 	// Checagem silenciosa alguns segundos após a janela abrir: não interrompe
