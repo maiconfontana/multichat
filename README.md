@@ -53,8 +53,8 @@ Na primeira execução:
 ## Atualizações
 
 O app verifica a versão publicada no GitHub — a checagem é silenciosa, alguns segundos após abrir, e só
-incomoda quando existe versão mais nova. O aviso oferece abrir o download no navegador; a instalação
-continua sendo sua decisão, nada é baixado nem instalado automaticamente.
+incomoda quando existe versão mais nova. A notificação **Há uma nova versão disponível** abre o changelog
+ou baixa o instalador (SHA-256) e reinicia o app empacotado. Nada instala sem o seu clique.
 
 - **Automaticamente:** ao iniciar (consulta à API de releases, 8 s de timeout, falha silenciosa).
 - **Manualmente:** menu **Ajuda → Verificar atualizações…**, que mostra também quando você já está na versão mais recente.
@@ -105,7 +105,8 @@ opções). Os dois scripts checam a versão do Node antes de começar.
 ## Funcionalidades
 
 - **Multi-conta**: várias contas do mesmo serviço ou de serviços diferentes, cada uma com seu próprio perfil de navegação (login isolado por conta)
-- **Equilíbrio entre conexão e memória**: contas são criadas sob demanda (lazy-load), continuam ativas em segundo plano e só são suspensas após 60 minutos sem uso, devolvendo memória sem perder o login; o prazo é configurável
+- **Logo da conta**: na criação e na edição dá para enviar uma imagem que entra na moldura redonda da sidebar
+- **Equilíbrio entre conexão e memória**: contas são criadas sob demanda (lazy-load), continuam ativas em segundo plano e só são suspensas após 60 minutos sem uso, devolvendo memória sem perder o login; o prazo é configurável; dá para hibernar todas, inclusive a última visível
 - **Sidebar recolhível**: alterne entre a lista expandida (280px) e o modo compacto apenas com ícones (72px) — o estado é persistido entre inicializações
 - **Notificações desktop** com título da conta e clique para focar a conversa; pode ser ligado/desligado por conta
 - **Contador de não lidas** por conta, refletido na sidebar e na bandeja (tray)
