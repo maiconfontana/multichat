@@ -1,7 +1,7 @@
 {
   "name": "multichat",
   "desktopName": "multichat",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "MultiChat — Multi-account messenger desktop app",
   "author": "Maicon Fontana",
   "license": "MIT",
@@ -29,7 +29,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "check": "node --check src/main.js && node --check src/whatsapp-preload.js && node --check src/whatsapp-assistant-adapter.js && node --check src/assistant-core.js && node --check src/assistant-settings.js && node --check src/openai-client.js && node --check src/assistant-preload.js && node --check src/assistant.js && node --check src/messenger-preload.js && node --check src/accounts.js && node --check src/preload.js && node --check src/resource-policy.js && node --check src/update-check.js && node --check src/account-avatar.js && node --check src/idle-preload.js && node --check src/apply-update.js",
+    "check": "node --check src/main.js && node --check src/whatsapp-preload.js && node --check src/whatsapp-assistant-adapter.js && node --check src/assistant-core.js && node --check src/assistant-settings.js && node --check src/openai-client.js && node --check src/assistant-preload.js && node --check src/assistant.js && node --check src/messenger-preload.js && node --check src/accounts.js && node --check src/preload.js && node --check src/resource-policy.js && node --check src/update-check.js && node --check src/account-avatar.js && node --check src/idle-preload.js && node --check src/apply-update.js && node --check src/deeplink.js && node --check src/unread-badge.js",
     "icons": "electron scripts/gen-icon.js",
     "bump": "node scripts/bump-version.js",
     "clean": "rm -rf ./dist",
@@ -88,6 +88,9 @@
     "mac": {
       "icon": "assets/icon.png",
       "category": "public.app-category.social-networking",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
       "artifactName": "MultiChat-${version}-mac-${arch}.${ext}",
       "target": [
         {
@@ -111,6 +114,13 @@
         "name": "WhatsApp",
         "schemes": [
           "whatsapp"
+        ]
+      },
+      {
+        "name": "Microsoft Teams",
+        "schemes": [
+          "msteams",
+          "ms-teams"
         ]
       }
     ]
