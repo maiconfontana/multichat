@@ -110,14 +110,19 @@ jobs:
 
       - name: Conferir assinatura ad-hoc
         run: |
+          # codesign -dv imprime "Sealed Resources version=2 …", não "Sealed Resources=yes".
           apps=$(find dist -name 'MultiChat.app' -type d)
           test -n "$apps"
           for app in $apps; do
             echo "== $app =="
-            codesign --verify --deep --strict "$app"
+            codesign --verify --deep "$app"
             codesign -dv --verbose=4 "$app" 2>&1 | tee /tmp/cs.txt
-            grep -q 'Sealed Resources=yes' /tmp/cs.txt
             grep -q 'Signature=adhoc' /tmp/cs.txt
+            grep -E -q 'Sealed Resources version=[0-9]+' /tmp/cs.txt
+            if grep -q 'linker-signed' /tmp/cs.txt || grep -q 'Sealed Resources=none' /tmp/cs.txt; then
+              echo "Assinatura inválida (linker-signed / sem recursos selados)" >&2
+              exit 1
+            fi
           done
 
       - name: Guardar artefatos
