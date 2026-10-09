@@ -519,7 +519,7 @@
 		<div class="dl-sheet-head">
 			<span class="chip">macOS</span>
 			<h3>Intel e Apple Silicon</h3>
-			<p class="note">Sem notarização da Apple: na primeira abertura use botão direito → <strong>Abrir</strong>. Se disser “danificado”, <code>xattr -dr com.apple.quarantine /Applications/MultiChat.app</code></p>
+			<p class="note">Sem notarização da Apple: na primeira abertura, botão direito → <strong>Abrir</strong> ou <em>Ajustes → Privacidade e Segurança → Abrir mesmo assim</em>. A 1.7.1 corrige o falso “danificado” do Gatekeeper.</p>
 		</div>
 		<ul class="dl-links" id="dl-macos"></ul>
 	</div>
@@ -562,7 +562,7 @@
 			</li>
 			<li>
 				<h3><span class="n">atenção</span>Notificação que diz de onde veio</h3>
-				<p>A notificação nativa traz o <b>nome da conta</b>, o contador de não lidas aparece na barra lateral — e sobre o avatar quando ela está recolhida, a 72 pixels —, e o ícone da bandeja acumula o total. Clique na notificação e a janela foca aquela conta. Bandeja com <code>badge</code> incluso.</p>
+				<p>A notificação nativa traz o <b>nome da conta</b>, o contador de não lidas aparece na barra lateral — e sobre o avatar quando ela está recolhida, a 72 pixels —, e o ícone da bandeja acumula o total. No Mac o Dock ganha o selo vermelho nativo (o oval pequeno do sistema, não um desenho nosso; acima de 99 vira <code>99+</code>). Clique na notificação e a janela foca aquela conta.</p>
 			</li>
 			<li>
 				<h3><span class="n">logo</span>Foto na mesma bolinha da barra</h3>
@@ -585,6 +585,10 @@
 				<p>Bootstrap e ícones vêm empacotados dentro do app (<code>src/vendor/</code>). Sem internet a interface continua desenhando; o que não abre é o site do mensageiro, que também não abriria no navegador.</p>
 			</li>
 			<li>
+				<h3><span class="n">atalho</span>Link de WhatsApp e reunião do Teams</h3>
+				<p>Clique em <code>whatsapp://</code>, <code>wa.me</code> ou num convite <code>teams.microsoft.com/l/meetup-join</code> e o MultiChat acorda a conta certa. Se existir mais de uma conta daquele serviço, pergunta qual usar. O atalho “abrir no app” do WhatsApp Web deixa de fugir para o cliente oficial.</p>
+			</li>
+			<li>
 				<h3><span class="n">atualizar</span>Avisa, e você escolhe se instala</h3>
 				<p>O app consulta a API de releases alguns segundos após abrir e, se houver versão nova, mostra a notificação <b>Há uma nova versão disponível</b>. Dá para abrir o changelog ou atualizar e reiniciar — o arquivo é conferido com SHA-256. Também está em <b>Ajuda → Verificar atualizações…</b>. Nada instala sem o seu clique.</p>
 			</li>
@@ -604,7 +608,7 @@
 		</div>
 		<div class="compat-row">
 			<dt>macOS</dt>
-			<dd>Precisa da liberação manual descrita na seção de downloads. Assinatura e notarização exigem o Apple Developer Program (US$ 99/ano) — não há caminho gratuito. Quem prefere evitar os dois avisos pode compilar na própria máquina.</dd>
+			<dd>Ainda sem notarização (Apple Developer Program, US$ 99/ano). A 1.7.1 assina o binário de forma ad-hoc: some o diálogo da lixeira; resta o aviso de desenvolvedor não identificado, com “Abrir mesmo assim”. Quem quiser zero aviso compila na própria máquina.</dd>
 			<dd><span class="v-tag v-warn">sem notarização</span></dd>
 		</div>
 		<div class="compat-row">
@@ -637,7 +641,7 @@
 			</li>
 			<li>
 				<h3>macOS <span>— arm64 ou Intel</span></h3>
-				<p>Abra o <code>.dmg</code> (arm64 para Apple Silicon), arraste para Aplicativos e use botão direito → <strong>Abrir</strong> na primeira vez. Persistiu o aviso de app “danificado”? <code>xattr -dr com.apple.quarantine /Applications/MultiChat.app</code></p>
+				<p>Abra o <code>.dmg</code> (arm64 para Apple Silicon), arraste para Aplicativos e, na primeira vez, use botão direito → <strong>Abrir</strong> ou libere em Ajustes → Privacidade e Segurança. A 1.7.1 traz assinatura ad-hoc: o macOS não deve mais fingir que o arquivo está corrompido.</p>
 			</li>
 			<li>
 				<h3>Linux <span>— x64</span></h3>
@@ -701,7 +705,7 @@ npm run start</code></pre>
 		<dl class="facts">
 			<div>
 				<dt>ARQUITETURA</dt>
-				<dd>Electron <span>— o app abre o site oficial de cada mensageiro numa <code>WebContentsView</code> separada. Não há protocolo próprio nem backend.</span></dd>
+				<dd>Electron <span>— o app abre o site oficial de cada mensageiro numa <code>WebContentsView</code> separada. Associa os protocolos <code>whatsapp://</code> e <code>msteams://</code> no sistema; não há backend próprio.</span></dd>
 			</div>
 			<div>
 				<dt>ONDE VÃO OS DADOS</dt>

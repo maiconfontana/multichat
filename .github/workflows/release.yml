@@ -97,12 +97,28 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      # Sem certificado da Apple o build sai sem assinatura nem notarização:
-      # o usuário precisa liberar o app na primeira abertura (ver README).
+      # Assinatura ad-hoc (package.json mac.identity = "-"): o Gatekeeper deixa
+      # de chamar o app de "danificado" no Apple Silicon. Sem certificado pago
+      # ainda aparece o aviso de desenvolvedor não identificado, que dá para
+      # ignorar em Ajustes → Privacidade e Segurança. CSC_IDENTITY_AUTO_DISCOVERY
+      # não pode ser false aqui — isso pulava o codesign inteiro.
       - name: Gerar dmg e zip (Intel e Apple Silicon)
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run dist:mac -- --publish=never
+        run: |
+          unset CSC_LINK || true
+          unset CSC_KEY_PASSWORD || true
+          npm run dist:mac -- --publish=never
+
+      - name: Conferir assinatura ad-hoc
+        run: |
+          apps=$(find dist -name 'MultiChat.app' -type d)
+          test -n "$apps"
+          for app in $apps; do
+            echo "== $app =="
+            codesign --verify --deep --strict "$app"
+            codesign -dv --verbose=4 "$app" 2>&1 | tee /tmp/cs.txt
+            grep -q 'Sealed Resources=yes' /tmp/cs.txt
+            grep -q 'Signature=adhoc' /tmp/cs.txt
+          done
 
       - name: Guardar artefatos
         uses: actions/upload-artifact@v4

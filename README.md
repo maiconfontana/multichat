@@ -40,11 +40,10 @@ Ao instalar uma versão nova, instale por cima da anterior: contas e preferênci
 
 ### macOS: primeira abertura
 
-O app não é assinado nem notarizado pela Apple (isso exige o Apple Developer Program, pago).
-Na primeira execução:
+O app não é notarizado pela Apple (isso exige o Apple Developer Program, pago). A partir da 1.7.1 o binário sai com **assinatura ad-hoc**, então o macOS não deve mais dizer que o app está “danificado”. Na primeira execução:
 
-1. Clique com o botão direito no app → **Abrir** → **Abrir** (ou libere em *Ajustes do Sistema → Privacidade e Segurança*).
-2. Se o macOS disser que o app está “danificado” (acontece com arquivos baixados), remova a marca de quarentena:
+1. Clique com o botão direito no app → **Abrir** → **Abrir** (ou libere em *Ajustes do Sistema → Privacidade e Segurança → Abrir mesmo assim*).
+2. Se ainda aparecer “danificado”, remova a marca de quarentena:
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/MultiChat.app
@@ -109,12 +108,12 @@ opções). Os dois scripts checam a versão do Node antes de começar.
 - **Equilíbrio entre conexão e memória**: contas são criadas sob demanda (lazy-load), continuam ativas em segundo plano e só são suspensas após 60 minutos sem uso, devolvendo memória sem perder o login; o prazo é configurável; dá para hibernar todas, inclusive a última visível
 - **Sidebar recolhível**: alterne entre a lista expandida (280px) e o modo compacto apenas com ícones (72px) — o estado é persistido entre inicializações
 - **Notificações desktop** com título da conta e clique para focar a conversa; pode ser ligado/desligado por conta
-- **Contador de não lidas** por conta, refletido na sidebar e na bandeja (tray)
+- **Contador de não lidas** por conta, refletido na sidebar, na bandeja (tray) e, no Mac, no badge nativo do Dock (até 99+)
 - **Tray** (bandeja do sistema): minimizar/retornar para a bandeja em vez de fechar
 - **Compartilhamento de tela** no WhatsApp Web, com seletor próprio de telas/janelas
 - **Assistente contextual para WhatsApp**: lê somente as mensagens visíveis, gera um rascunho pela OpenAI e o insere no campo de edição para revisão e envio manual; não envia mensagens automaticamente
 - **Correção ortográfica** (en-US, pt-BR)
-- **Protocolo `whatsapp://`** registrado como aplicativo associado
+- **Deeplinks**: `whatsapp://`, `wa.me`, `msteams://` / `ms-teams://` e links de reunião do Teams abrem no MultiChat; se houver mais de uma conta do mesmo tipo, o app pergunta qual usar
 - **Funciona offline na interface**: os recursos da interface (Bootstrap e ícones) são carregados localmente, sem CDN
 
 ## Requisitos

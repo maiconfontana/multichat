@@ -10,9 +10,12 @@ const { DEFAULT_GATEWAY, DEFAULT_PROFILES, normalizeGateway, normalizeProfiles, 
 const { checkForUpdate, PAGE_URL: RELEASES_URL } = require('./update-check');
 const { excerptNotes, isTrustedDownloadUrl, parseSha256Sums, expectedHash, sha256File, macBundlePath, downloadFile, readText, spawnDetached, writeMacSwapScript, writeLinuxSwapScript, unpackMacZip } = require('./apply-update');
 const { avatarFilePath, processAccountAvatar, pngDataUrl, isSafeAccountId } = require('./account-avatar');
+const { parseDeeplink, matchingAccounts, findDeeplinkInArgv, accountKind, DEEPLINK_SCHEMES } = require('./deeplink');
+const { totalUnread, dockBadgeLabel } = require('./unread-badge');
 
 // Página pública do projeto (GitHub Pages, publicada a partir de docs/).
 const SITE_URL = "https://maiconfontana.github.io/multichat/";
+const pendingDeeplinks = [];
 
 // Constantes serializáveis para enviar aos renderers via IPC (sem funções,
 // que não atravessam a ponte — ver initResources / init*Instance).
@@ -69,6 +72,8 @@ class MultiChatApp {
 		this.assistantWidth = 400;
 		this.idleView = null;
 		this.idleVisible = false;
+		this.deeplinkQueue = [];
+		this.deeplinkBusy = false;
 
 		this.bounds = this.store.get("bounds");
 		if (this.bounds == undefined) {
@@ -188,6 +193,16 @@ class MultiChatApp {
 		app.userAgentFallback = Constants.whatsapp.userAgent;
 		if (process.platform == "win32")
 			app.setAppUserModelId(Constants.appId);
+		this.registerDeeplinkSchemes();
+	}
+
+	registerDeeplinkSchemes() {
+		for (const scheme of DEEPLINK_SCHEMES) {
+			if (process.defaultApp && process.argv[1])
+				app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1])]);
+			else
+				app.setAsDefaultProtocolClient(scheme);
+		}
 	}
 
 	init() {
@@ -225,6 +240,8 @@ class MultiChatApp {
 
 		if (this.trayEnabled)
 			this.createTray();
+		else
+			this.updateTrayBadgeCounter();
 		nativeTheme.on("updated", () => { this.updateTrayBadgeCounter(); });
 
 		this.activeNotifications = [];
@@ -234,6 +251,101 @@ class MultiChatApp {
 
 		// Checagem silenciosa de versão: só avisa se houver release mais nova.
 		this.scheduleUpdateCheck();
+		this.flushPendingDeeplinks();
+	}
+
+	flushPendingDeeplinks() {
+		const fromArgv = findDeeplinkInArgv(process.argv);
+		if (fromArgv) pendingDeeplinks.push(fromArgv);
+		const queued = pendingDeeplinks.splice(0, pendingDeeplinks.length);
+		for (const url of queued)
+			this.openDeeplink(url);
+	}
+
+	openDeeplink(raw) {
+		if (typeof raw !== "string" || !raw.trim()) return;
+		this.deeplinkQueue.push(raw);
+		this.drainDeeplinks();
+	}
+
+	drainDeeplinks() {
+		if (this.deeplinkBusy) return;
+		this.deeplinkBusy = true;
+		const run = async () => {
+			try {
+				while (this.deeplinkQueue.length)
+					await this.processDeeplink(this.deeplinkQueue.shift());
+			} catch (err) {
+				console.warn(`MultiChat: Deeplink falhou: ${err.message}`);
+			} finally {
+				this.deeplinkBusy = false;
+				if (this.deeplinkQueue.length) this.drainDeeplinks();
+			}
+		};
+		run();
+	}
+
+	async processDeeplink(raw) {
+		const parsed = parseDeeplink(raw);
+		if (!parsed) return;
+		this.showHide(false);
+
+		const matches = matchingAccounts(this.accounts, parsed.kind);
+		const label = parsed.kind === "whatsapp" ? "WhatsApp" : "Teams";
+		if (matches.length === 0) {
+			if (!this.window) return;
+			const { response } = await dialog.showMessageBox(this.window, {
+				type: "info",
+				title: Constants.appName,
+				message: `Nenhuma conta ${label} para abrir o link`,
+				detail: "Crie uma conta desse tipo no MultiChat e clique de novo no atalho.",
+				buttons: ["Criar conta", "Cancelar"],
+				defaultId: 0,
+				cancelId: 1
+			});
+			if (response === 0) this.promptAddAccount();
+			return;
+		}
+
+		let account = matches[0];
+		if (matches.length > 1) {
+			const preferred = this.store.get(`deeplinkPreferred.${parsed.kind}`);
+			const activeIdx = matches.findIndex(a => a.id === this.activeId);
+			const preferredIdx = matches.findIndex(a => a.id === preferred);
+			const defaultId = activeIdx >= 0 ? activeIdx : (preferredIdx >= 0 ? preferredIdx : 0);
+			const { response } = await dialog.showMessageBox(this.window, {
+				type: "question",
+				title: Constants.appName,
+				message: `Abrir em qual conta ${label}?`,
+				buttons: [...matches.map(a => a.name), "Cancelar"],
+				defaultId,
+				cancelId: matches.length,
+				noLink: true
+			});
+			if (response === matches.length || response < 0) return;
+			account = matches[response];
+			this.store.set(`deeplinkPreferred.${parsed.kind}`, account.id);
+		}
+
+		this.openUrlInAccount(account.id, parsed.loadUrl);
+	}
+
+	openUrlInAccount(id, loadUrl) {
+		this.setCurrentView(id);
+		const inst = this.instances[id];
+		if (!inst || !inst.view || inst.view.webContents.isDestroyed()) return;
+		if (!loadUrl) return;
+		const current = inst.view.webContents.getURL();
+		if (current === loadUrl) return;
+		inst.view.webContents.loadURL(loadUrl, { userAgent: Constants.whatsapp.userAgent });
+	}
+
+	stealCrossAppDeeplink(currentType, targetUrl) {
+		const parsed = parseDeeplink(targetUrl);
+		if (!parsed) return false;
+		if (accountKind(currentType) === parsed.kind) return false;
+		this.openDeeplink(targetUrl);
+		return true;
 	}
 
 	registerEvents() {
@@ -376,6 +488,7 @@ class MultiChatApp {
 			}
 
 			this.sidebarView.webContents.send(Constants.event.reloadAccounts);
+			this.updateTrayBadgeCounter();
 		});
 
 		ipcMain.on(Constants.event.gotoAccount, (event, id) => {
@@ -1042,9 +1155,13 @@ class MultiChatApp {
 		view.webContents.loadURL(url, { userAgent: Constants.whatsapp.userAgent });
 
 		view.webContents.setWindowOpenHandler((details) => {
-			// Allow the site's own windows/links, open everything else externally
+			if (this.stealCrossAppDeeplink(type, details.url))
+				return { action: "deny" };
 			try {
-				const host = new URL(details.url).hostname;
+				const opened = new URL(details.url);
+				if (opened.protocol === "whatsapp:" || opened.protocol === "msteams:" || opened.protocol === "ms-teams:")
+					return { action: "deny" };
+				const host = opened.hostname;
 				const baseHost = new URL(url).hostname;
 				if (host === baseHost || host.endsWith("." + baseHost))
 					return { action: "allow" };
@@ -1055,6 +1172,21 @@ class MultiChatApp {
 					shell.openExternal(external.href);
 			} catch (e) {}
 			return { action: 'deny' };
+		});
+
+		view.webContents.on("will-navigate", (event, navUrl) => {
+			let opened;
+			try { opened = new URL(navUrl); } catch { return; }
+			if (opened.protocol === "http:" || opened.protocol === "https:") {
+				if (this.stealCrossAppDeeplink(type, navUrl))
+					event.preventDefault();
+				return;
+			}
+			const parsed = parseDeeplink(navUrl);
+			if (!parsed) return;
+			event.preventDefault();
+			if (accountKind(type) !== parsed.kind)
+				this.openDeeplink(navUrl);
 		});
 
 		view.webContents.on("did-finish-load", () => {
@@ -1284,11 +1416,17 @@ class MultiChatApp {
 		return retina;
 	}
 
+	syncDockBadge(counter) {
+		if (process.platform !== "darwin" || !app.dock) return;
+		const label = dockBadgeLabel(counter);
+		if (app.dock.getBadge() === label) return;
+		app.dock.setBadge(label);
+	}
+
 	updateTrayBadgeCounter() {
+		const counter = totalUnread(this.instances);
+		this.syncDockBadge(counter);
 		if (!this.tray) return;
-		let counter = 0;
-		for (const id in this.instances)
-			counter += this.instances[id].unread;
 
 		if (counter == 0) {
 			this.tray.setImage(this.getDefaultTrayImage());
@@ -1568,6 +1706,7 @@ class MultiChatApp {
 	}
 
 	showHide(hide = true) {
+		if (!this.window) return;
 		if (!this.window.isFocused()) {
 			if (this.window.isVisible())
 				this.window.focus();
@@ -1594,8 +1733,20 @@ app.whenReady().then(() => {
 	ws.init();
 });
 
-app.on('second-instance', () => {
-	ws.showHide(false);
+app.on('open-url', (event, url) => {
+	event.preventDefault();
+	if (ws.window) ws.openDeeplink(url);
+	else pendingDeeplinks.push(url);
+});
+
+app.on('second-instance', (event, commandLine) => {
+	const url = findDeeplinkInArgv(commandLine);
+	if (ws.window) {
+		ws.showHide(false);
+		if (url) ws.openDeeplink(url);
+	} else if (url) {
+		pendingDeeplinks.push(url);
+	}
 });
 
 app.on('activate', () => {
